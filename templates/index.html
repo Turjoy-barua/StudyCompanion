@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Study Companion</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='study-companion-logo.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="topbar">
+        <div class="brand-mark">
+          <img
+            src="{{ url_for('static', filename='study-companion-logo.svg') }}"
+            alt="Study Companion logo"
+            class="brand-logo"
+          >
+          <span>Study Companion</span>
+        </div>
+        <button type="button" id="accountToggle" class="account-button" aria-label="Open account login">
+          <span class="account-avatar">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"></path>
+            </svg>
+          </span>
+          <span class="account-copy">
+            <strong>Account</strong>
+            <small>Login</small>
+          </span>
+        </button>
+      </div>
+
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Quote of the day</p>
+          <h1>“{{ dashboard.motivation.text }}”</h1>
+          <p class="hero-text">
+            {{ dashboard.motivation.author }}
+          </p>
+        </div>
+        <div class="hero-panel">
+          <div class="metric-card accent">
+            <span class="metric-label">Current title</span>
+            <strong class="metric-value">{{ dashboard.title }}</strong>
+            <span class="metric-meta">Level {{ dashboard.level }} • {{ dashboard.xp }} XP</span>
+          </div>
+          <div class="metric-grid">
+            <div class="metric-card">
+              <span class="metric-label">Today</span>
+              <strong class="metric-value">{{ dashboard.today_minutes }} min</strong>
+              <span class="metric-meta">{{ dashboard.today_sessions }} session{{ '' if dashboard.today_sessions == 1 else 's' }}</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Streak</span>
+              <strong class="metric-value">{{ dashboard.streak }} day{{ '' if dashboard.streak == 1 else 's' }}</strong>
+              <span class="metric-meta">Keep the chain alive</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <section class="flash-stack" aria-live="polite">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </section>
+        {% endif %}
+      {% endwith %}
+
+      <main class="content-grid">
+        <section class="panel timer-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Focus mode</p>
+              <h2>Study timer</h2>
+            </div>
+            <button type="button" id="focusToggle" class="ghost-button">Open focus view</button>
+          </div>
+
+          <div class="timer-shell" data-today="{{ today }}">
+            <div class="timer-display-wrap">
+              <p id="timerPhase" class="timer-phase">Regular session</p>
+              <div id="timerDisplay" class="timer-display">00:00:00</div>
+              <p id="timerHint" class="timer-hint">Start a session or switch to Pomodoro for 25/5 cycles.</p>
+            </div>
+
+            <div class="timer-settings">
+              <label>
+                <span>Subject</span>
+                <input id="timerSubject" type="text" placeholder="Mathematics">
+              </label>
+              <label>
+                <span>Mode</span>
+                <select id="timerMode">
+                  <option value="regular">Regular timer</option>
+                  <option value="pomodoro">Pomodoro 25/5</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="focus-theme-picker">
+              <div class="focus-theme-heading">
+                <span>Focus wallpaper</span>
+                <small>Choose 1 of 10 moods for focus view</small>
+              </div>
+              <div id="focusThemeOptions" class="focus-theme-options" aria-label="Focus themes"></div>
+            </div>
+
+            <div class="timer-actions">
+              <button type="button" id="startTimer">Start</button>
+              <button type="button" id="pauseTimer" class="ghost-button">Pause</button>
+              <button type="button" id="resetTimer" class="ghost-button">Reset</button>
+              <button type="button" id="saveTimerSession" class="secondary-button">Save session</button>
+            </div>
+
+            <p id="timerStatus" class="status-text" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <section class="panel log-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Session logging</p>
+              <h2>Add a study block</h2>
+            </div>
+          </div>
+
+          <form action="{{ url_for('create_session') }}" method="post" class="session-form">
+            <label>
+              <span>Subject</span>
+              <input type="text" name="subject" placeholder="Physics" required>
+            </label>
+            <label>
+              <span>Duration (minutes)</span>
+              <input type="number" name="duration_minutes" min="1" step="1" placeholder="45" required>
+            </label>
+            <label>
+              <span>Date</span>
+              <input type="date" name="session_date" value="{{ today }}">
+            </label>
+            <button type="submit">Save session</button>
+          </form>
+
+          <div class="mini-metrics">
+            <article class="mini-card">
+              <span>This month focused time</span>
+              <strong>{{ dashboard.total_minutes }} minutes</strong>
+            </article>
+            <article class="mini-card">
+              <span>XP earned</span>
+              <strong>{{ dashboard.xp }} XP</strong>
+            </article>
+            <article class="mini-card">
+              <span>Consistency title</span>
+              <strong>{{ dashboard.title }}</strong>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel analytics-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Dashboard</p>
+              <h2>Weekly progress</h2>
+            </div>
+          </div>
+
+          <div id="weeklyChart" class="chart-bars" data-chart='{{ dashboard.weekly_activity | tojson }}'></div>
+        </section>
+
+        <section class="panel subjects-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Dashboard</p>
+              <h2>Subject breakdown</h2>
+            </div>
+          </div>
+
+          <div class="subject-list">
+            {% if dashboard.subject_breakdown %}
+              {% set max_minutes = dashboard.subject_breakdown[0].minutes %}
+              {% for item in dashboard.subject_breakdown %}
+                <article class="subject-item">
+                  <div class="subject-row">
+                    <strong>{{ item.subject }}</strong>
+                    <span>{{ item.minutes }} min</span>
+                  </div>
+                  <div class="subject-bar">
+                    <span style="width: {{ (item.minutes / max_minutes * 100) if max_minutes else 0 }}%"></span>
+                  </div>
+                </article>
+              {% endfor %}
+            {% else %}
+              <p class="empty-state">No sessions yet. Start the timer or log your first study block.</p>
+            {% endif %}
+          </div>
+        </section>
+
+        <section class="panel history-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">History</p>
+              <h2>Recent sessions</h2>
+            </div>
+          </div>
+
+          {% if dashboard.recent_sessions %}
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Subject</th>
+                    <th>Duration</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for session in dashboard.recent_sessions %}
+                    <tr>
+                      <td>{{ session.subject }}</td>
+                      <td>{{ session.duration_minutes }} min</td>
+                      <td>{{ session.session_date }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="empty-state">Your saved sessions will appear here.</p>
+          {% endif %}
+        </section>
+      </main>
+    </div>
+
+    <div id="focusOverlay" class="focus-overlay" hidden>
+      <button type="button" id="closeFocus" class="close-focus">Close</button>
+      <div class="focus-inner">
+        <p id="focusThemeLabel" class="focus-theme-label">Midnight Orbit</p>
+        <p class="eyebrow">Focus mode</p>
+        <div id="focusDisplay" class="focus-display">00:00:00</div>
+        <p id="focusPhase" class="focus-phase">Regular session</p>
+      </div>
+    </div>
+
+    <div id="accountModal" class="account-modal" hidden>
+      <div class="account-card" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+        <button type="button" id="closeAccount" class="close-account" aria-label="Close login dialog">Close</button>
+        <p class="eyebrow">User access</p>
+        <h2 id="accountTitle">Login to your account</h2>
+        <p class="account-text">
+          This is the frontend entry point for authentication. Connect the form to your user backend when you add real accounts.
+        </p>
+
+        <form class="account-form">
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" placeholder="student@example.com">
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" name="password" placeholder="Enter password">
+          </label>
+          <button type="submit">Login</button>
+        </form>
+
+        <p class="account-note">No account yet? Add signup logic here when you wire backend authentication.</p>
+      </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

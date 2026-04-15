@@ -90,7 +90,7 @@ The goal is to turn studying into something **interactive, rewarding, and consis
 ```
 study-companion/
 │
-├── app.py              # Main Streamlit app
+├── app.py              # Main flask app
 ├── database.db        # SQLite database (or data.json)
 ├── utils.py           # Helper functions (XP, streak, etc.)
 ├── requirements.txt   # Dependencies
@@ -104,7 +104,7 @@ study-companion/
 1. Clone the repository:
 
 ```
-git clone https://github.com/your-username/study-companion.git
+git clone https://github.com/Turjoy-barua/StudyCompanion
 cd study-companion
 ```
 

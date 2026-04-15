@@ -3,6 +3,7 @@
   const timerPhase = document.getElementById("timerPhase");
   const timerHint = document.getElementById("timerHint");
   const timerStatus = document.getElementById("timerStatus");
+  const focusTargetSelect = document.getElementById("focusTargetSelect");
   const timerSubject = document.getElementById("timerSubject");
   const timerMode = document.getElementById("timerMode");
   const startButton = document.getElementById("startTimer");
@@ -20,10 +21,20 @@
   const accountModal = document.getElementById("accountModal");
   const closeAccount = document.getElementById("closeAccount");
   const weeklyChart = document.getElementById("weeklyChart");
+  const appThemeOptions = document.getElementById("appThemeOptions");
+  const navItems = Array.from(document.querySelectorAll(".sidebar-nav-item"));
+  const appViews = Array.from(document.querySelectorAll(".app-view"));
+  const accountOpenButtons = Array.from(document.querySelectorAll("[data-open-account='true']"));
+  const confidenceSliders = Array.from(document.querySelectorAll("[data-confidence-slider]"));
   const today = document.querySelector(".timer-shell")?.dataset.today;
 
   const pomodoroFocusSeconds = 25 * 60;
   const pomodoroBreakSeconds = 5 * 60;
+  const appThemes = [
+    { id: "ivory", label: "Ivory", description: "Soft white study board" },
+    { id: "rose", label: "Rose", description: "Warm pastel workspace" },
+    { id: "slate", label: "Slate", description: "Cool clean planner" },
+  ];
   const focusThemes = [
     { id: "midnight-orbit", label: "Midnight Orbit" },
     { id: "aurora-drift", label: "Aurora Drift" },
@@ -37,6 +48,8 @@
     { id: "cosmic-wave", label: "Cosmic Wave" },
   ];
   const defaultFocusTheme = focusThemes[0].id;
+  const defaultAppTheme = appThemes[0].id;
+  const defaultView = "dashboard";
 
   let timerId = null;
   let elapsedSeconds = 0;
@@ -44,6 +57,103 @@
   let pomodoroPhase = "focus";
   let focusSecondsEarned = 0;
   let activeFocusTheme = defaultFocusTheme;
+
+  function applyAppView(viewId) {
+    const targetView = appViews.find((view) => view.dataset.view === viewId) || appViews[0];
+    if (!targetView) {
+      return;
+    }
+
+    for (const view of appViews) {
+      view.classList.toggle("is-active", view === targetView);
+    }
+
+    for (const item of navItems) {
+      const isActive = item.dataset.viewTarget === targetView.dataset.view;
+      item.classList.toggle("is-active", isActive);
+      item.setAttribute("aria-pressed", String(isActive));
+    }
+
+    window.localStorage.setItem("study-companion-active-view", targetView.dataset.view);
+  }
+
+  function initializeNavigation() {
+    if (!navItems.length || !appViews.length) {
+      return;
+    }
+
+    for (const item of navItems) {
+      item.addEventListener("click", () => applyAppView(item.dataset.viewTarget || defaultView));
+    }
+
+    const savedView = window.localStorage.getItem("study-companion-active-view");
+    applyAppView(savedView || defaultView);
+  }
+
+  function initializeConfidenceSliders() {
+    for (const slider of confidenceSliders) {
+      const valueNode = slider.parentElement?.querySelector("[data-confidence-value]");
+      const renderValue = () => {
+        if (valueNode) {
+          valueNode.textContent = `${slider.value}%`;
+        }
+      };
+      slider.addEventListener("input", renderValue);
+      renderValue();
+    }
+  }
+
+  function applyAppTheme(themeId) {
+    const matchedTheme = appThemes.find((theme) => theme.id === themeId) || appThemes[0];
+    document.body.dataset.appTheme = matchedTheme.id;
+
+    if (appThemeOptions) {
+      for (const option of appThemeOptions.querySelectorAll(".app-theme-option")) {
+        const isActive = option.dataset.theme === matchedTheme.id;
+        option.classList.toggle("is-active", isActive);
+        option.setAttribute("aria-pressed", String(isActive));
+      }
+    }
+
+    window.localStorage.setItem("study-companion-app-theme", matchedTheme.id);
+  }
+
+  function renderAppThemes() {
+    if (!appThemeOptions) {
+      return;
+    }
+
+    appThemeOptions.innerHTML = appThemes
+      .map(
+        (theme) => `
+          <button
+            type="button"
+            class="app-theme-option"
+            data-theme="${theme.id}"
+            aria-pressed="false"
+            aria-label="Use ${theme.label} app theme"
+          >
+            <span class="app-theme-preview" data-theme="${theme.id}"></span>
+            <span class="app-theme-copy">
+              <strong>${theme.label}</strong>
+              <small>${theme.description}</small>
+            </span>
+          </button>
+        `
+      )
+      .join("");
+
+    appThemeOptions.addEventListener("click", (event) => {
+      const option = event.target.closest(".app-theme-option");
+      if (!option) {
+        return;
+      }
+      applyAppTheme(option.dataset.theme || defaultAppTheme);
+    });
+
+    const savedTheme = window.localStorage.getItem("study-companion-app-theme");
+    applyAppTheme(savedTheme || defaultAppTheme);
+  }
 
   function formatSeconds(totalSeconds) {
     const hours = Math.floor(totalSeconds / 3600);
@@ -263,10 +373,20 @@
   pauseButton?.addEventListener("click", pauseTimer);
   resetButton?.addEventListener("click", resetTimer);
   saveButton?.addEventListener("click", saveSession);
+  focusTargetSelect?.addEventListener("change", () => {
+    if (!timerSubject || !focusTargetSelect.value) {
+      return;
+    }
+    timerSubject.value = focusTargetSelect.value;
+    timerStatus.textContent = `Focus target selected: ${focusTargetSelect.value}.`;
+  });
   timerMode?.addEventListener("change", resetTimer);
   focusToggle?.addEventListener("click", () => toggleFocus(true));
   closeFocus?.addEventListener("click", () => toggleFocus(false));
   accountToggle?.addEventListener("click", () => toggleAccount(true));
+  for (const button of accountOpenButtons) {
+    button.addEventListener("click", () => toggleAccount(true));
+  }
   closeAccount?.addEventListener("click", () => toggleAccount(false));
   focusOverlay?.addEventListener("click", (event) => {
     if (event.target === focusOverlay) {
@@ -279,6 +399,9 @@
     }
   });
 
+  initializeNavigation();
+  initializeConfidenceSliders();
+  renderAppThemes();
   renderFocusThemes();
   renderWeeklyChart();
   renderTimer();

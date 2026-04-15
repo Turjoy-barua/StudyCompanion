@@ -9,230 +9,444 @@
   </head>
   <body>
     <div class="page-shell">
-      <div class="topbar">
-        <div class="brand-mark">
-          <img
-            src="{{ url_for('static', filename='study-companion-logo.svg') }}"
-            alt="Study Companion logo"
-            class="brand-logo"
-          >
-          <span>Study Companion</span>
-        </div>
-        <button type="button" id="accountToggle" class="account-button" aria-label="Open account login">
-          <span class="account-avatar">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"></path>
-            </svg>
-          </span>
-          <span class="account-copy">
-            <strong>Account</strong>
-            <small>Login</small>
-          </span>
-        </button>
-      </div>
-
-      <header class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Quote of the day</p>
-          <h1>“{{ dashboard.motivation.text }}”</h1>
-          <p class="hero-text">
-            {{ dashboard.motivation.author }}
-          </p>
-        </div>
-        <div class="hero-panel">
-          <div class="metric-card accent">
-            <span class="metric-label">Current title</span>
-            <strong class="metric-value">{{ dashboard.title }}</strong>
-            <span class="metric-meta">Level {{ dashboard.level }} • {{ dashboard.xp }} XP</span>
-          </div>
-          <div class="metric-grid">
-            <div class="metric-card">
-              <span class="metric-label">Today</span>
-              <strong class="metric-value">{{ dashboard.today_minutes }} min</strong>
-              <span class="metric-meta">{{ dashboard.today_sessions }} session{{ '' if dashboard.today_sessions == 1 else 's' }}</span>
-            </div>
-            <div class="metric-card">
-              <span class="metric-label">Streak</span>
-              <strong class="metric-value">{{ dashboard.streak }} day{{ '' if dashboard.streak == 1 else 's' }}</strong>
-              <span class="metric-meta">Keep the chain alive</span>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <section class="flash-stack" aria-live="polite">
-            {% for category, message in messages %}
-              <div class="flash {{ category }}">{{ message }}</div>
-            {% endfor %}
-          </section>
-        {% endif %}
-      {% endwith %}
-
-      <main class="content-grid">
-        <section class="panel timer-panel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Focus mode</p>
-              <h2>Study timer</h2>
-            </div>
-            <button type="button" id="focusToggle" class="ghost-button">Open focus view</button>
+      <div class="app-layout">
+        <aside class="sidebar">
+          <div class="sidebar-brandmark">
+            <img
+              src="{{ url_for('static', filename='study-companion-logo.svg') }}"
+              alt="Study Companion logo"
+              class="brand-logo"
+            >
           </div>
 
-          <div class="timer-shell" data-today="{{ today }}">
-            <div class="timer-display-wrap">
-              <p id="timerPhase" class="timer-phase">Regular session</p>
-              <div id="timerDisplay" class="timer-display">00:00:00</div>
-              <p id="timerHint" class="timer-hint">Start a session or switch to Pomodoro for 25/5 cycles.</p>
-            </div>
+          <nav class="sidebar-nav" aria-label="Primary">
+            <button type="button" class="sidebar-nav-item is-active" data-view-target="dashboard" aria-label="Open dashboard">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h7V4H4Zm9 7h7V4h-7ZM4 20h7v-5H4Z"></path></svg>
+              </span>
+              <span>Dashboard</span>
+            </button>
+            <button type="button" class="sidebar-nav-item" data-view-target="focus" aria-label="Open focus page">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.4 8.7 8 9.9 4.6-1.2 8-4.9 8-9.9V7Zm0 4a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"></path></svg>
+              </span>
+              <span>Focus</span>
+            </button>
+            <button type="button" class="sidebar-nav-item" data-view-target="planner" aria-label="Open planner page">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h2v2h6V2h2v2h3v18H4V4h3Zm11 7H6v11h12Z"></path></svg>
+              </span>
+              <span>Planner</span>
+            </button>
+            <button type="button" class="sidebar-nav-item" data-view-target="friends" aria-label="Open friends page">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4ZM8 13a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm8 1c-2.7 0-8 1.34-8 4v2h16v-2c0-2.66-5.3-4-8-4ZM8 15c-.36 0-.75.02-1.17.05C4.58 15.24 0 16.35 0 19v1h6v-2c0-1.16.61-2.18 1.67-3A4.8 4.8 0 0 0 8 15Z"></path></svg>
+              </span>
+              <span>Friends</span>
+            </button>
+            <button type="button" class="sidebar-nav-item" data-view-target="settings" aria-label="Open settings page">
+              <span class="sidebar-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19.14 12.94.86-1.49-1.72-2.98-1.71.29a5.93 5.93 0 0 0-1.27-.74L14.9 6h-3.8l-.4 2.02c-.45.18-.87.43-1.27.74l-1.71-.29L6 11.45l.86 1.49a6.7 6.7 0 0 0 0 1.12L6 15.55l1.72 2.98 1.71-.29c.4.31.82.56 1.27.74l.4 2.02h3.8l.4-2.02c.45-.18.87-.43 1.27-.74l1.71.29L20 15.55l-.86-1.49c.06-.37.06-.75 0-1.12ZM13 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"></path></svg>
+              </span>
+              <span>Settings</span>
+            </button>
+          </nav>
 
-            <div class="timer-settings">
-              <label>
-                <span>Subject</span>
-                <input id="timerSubject" type="text" placeholder="Mathematics">
-              </label>
-              <label>
-                <span>Mode</span>
-                <select id="timerMode">
-                  <option value="regular">Regular timer</option>
-                  <option value="pomodoro">Pomodoro 25/5</option>
-                </select>
-              </label>
-            </div>
+          <button type="button" id="accountToggle" class="sidebar-profile-button" aria-label="Open account login">
+            <span class="account-avatar">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"></path>
+              </svg>
+            </span>
+          </button>
+        </aside>
 
-            <div class="focus-theme-picker">
-              <div class="focus-theme-heading">
-                <span>Focus wallpaper</span>
-                <small>Choose 1 of 10 moods for focus view</small>
-              </div>
-              <div id="focusThemeOptions" class="focus-theme-options" aria-label="Focus themes"></div>
-            </div>
-
-            <div class="timer-actions">
-              <button type="button" id="startTimer">Start</button>
-              <button type="button" id="pauseTimer" class="ghost-button">Pause</button>
-              <button type="button" id="resetTimer" class="ghost-button">Reset</button>
-              <button type="button" id="saveTimerSession" class="secondary-button">Save session</button>
-            </div>
-
-            <p id="timerStatus" class="status-text" aria-live="polite"></p>
-          </div>
-        </section>
-
-        <section class="panel log-panel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Session logging</p>
-              <h2>Add a study block</h2>
-            </div>
-          </div>
-
-          <form action="{{ url_for('create_session') }}" method="post" class="session-form">
-            <label>
-              <span>Subject</span>
-              <input type="text" name="subject" placeholder="Physics" required>
-            </label>
-            <label>
-              <span>Duration (minutes)</span>
-              <input type="number" name="duration_minutes" min="1" step="1" placeholder="45" required>
-            </label>
-            <label>
-              <span>Date</span>
-              <input type="date" name="session_date" value="{{ today }}">
-            </label>
-            <button type="submit">Save session</button>
-          </form>
-
-          <div class="mini-metrics">
-            <article class="mini-card">
-              <span>This month focused time</span>
-              <strong>{{ dashboard.total_minutes }} minutes</strong>
-            </article>
-            <article class="mini-card">
-              <span>XP earned</span>
-              <strong>{{ dashboard.xp }} XP</strong>
-            </article>
-            <article class="mini-card">
-              <span>Consistency title</span>
-              <strong>{{ dashboard.title }}</strong>
-            </article>
-          </div>
-        </section>
-
-        <section class="panel analytics-panel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Dashboard</p>
-              <h2>Weekly progress</h2>
-            </div>
-          </div>
-
-          <div id="weeklyChart" class="chart-bars" data-chart='{{ dashboard.weekly_activity | tojson }}'></div>
-        </section>
-
-        <section class="panel subjects-panel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Dashboard</p>
-              <h2>Subject breakdown</h2>
-            </div>
-          </div>
-
-          <div class="subject-list">
-            {% if dashboard.subject_breakdown %}
-              {% set max_minutes = dashboard.subject_breakdown[0].minutes %}
-              {% for item in dashboard.subject_breakdown %}
-                <article class="subject-item">
-                  <div class="subject-row">
-                    <strong>{{ item.subject }}</strong>
-                    <span>{{ item.minutes }} min</span>
-                  </div>
-                  <div class="subject-bar">
-                    <span style="width: {{ (item.minutes / max_minutes * 100) if max_minutes else 0 }}%"></span>
-                  </div>
-                </article>
-              {% endfor %}
-            {% else %}
-              <p class="empty-state">No sessions yet. Start the timer or log your first study block.</p>
+        <div class="main-column">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              <section class="flash-stack" aria-live="polite">
+                {% for category, message in messages %}
+                  <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+              </section>
             {% endif %}
-          </div>
-        </section>
+          {% endwith %}
 
-        <section class="panel history-panel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">History</p>
-              <h2>Recent sessions</h2>
-            </div>
-          </div>
+          <section class="app-view is-active" data-view="dashboard">
+            <header class="hero">
+              <div class="hero-copy">
+                <p class="eyebrow">Quote of the day</p>
+                <h1>“{{ dashboard.motivation.text }}”</h1>
+                <p class="hero-text">{{ dashboard.motivation.author }}</p>
+              </div>
+              <div class="hero-panel">
+                <div class="metric-card accent">
+                  <span class="metric-label">Current title</span>
+                  <strong class="metric-value">{{ dashboard.title }}</strong>
+                  <span class="metric-meta">Level {{ dashboard.level }} • {{ dashboard.xp }} XP</span>
+                </div>
+                <div class="metric-grid">
+                  <div class="metric-card">
+                    <span class="metric-label">Today</span>
+                    <strong class="metric-value">{{ dashboard.today_minutes }} min</strong>
+                    <span class="metric-meta">{{ dashboard.today_sessions }} session{{ '' if dashboard.today_sessions == 1 else 's' }}</span>
+                  </div>
+                  <div class="metric-card">
+                    <span class="metric-label">Streak</span>
+                    <strong class="metric-value">{{ dashboard.streak }} day{{ '' if dashboard.streak == 1 else 's' }}</strong>
+                    <span class="metric-meta">Keep the chain alive</span>
+                  </div>
+                </div>
+              </div>
+            </header>
 
-          {% if dashboard.recent_sessions %}
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Subject</th>
-                    <th>Duration</th>
-                    <th>Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for session in dashboard.recent_sessions %}
-                    <tr>
-                      <td>{{ session.subject }}</td>
-                      <td>{{ session.duration_minutes }} min</td>
-                      <td>{{ session.session_date }}</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
+            <section class="forced-plan-panel">
+              <div class="forced-plan-header">
+                <div>
+                  <p class="eyebrow">No thinking</p>
+                  <h2>{{ dashboard.forced_plan.headline }}</h2>
+                  <p class="forced-plan-summary">{{ dashboard.forced_plan.summary }}</p>
+                </div>
+                <div class="forced-plan-total">
+                  <span>Total today</span>
+                  <strong>{{ dashboard.forced_plan.total_minutes }} min</strong>
+                </div>
+              </div>
+
+              <div class="forced-plan-grid">
+                {% for block in dashboard.forced_plan.blocks %}
+                  <article class="forced-plan-step">
+                    <span class="forced-plan-order">Block {{ block.order }}</span>
+                    <p class="planner-item-kind">{{ block.item_kind }}{% if block.exam_type %} • {{ block.exam_type }}{% endif %}</p>
+                    <h3>{{ block.subject }}</h3>
+                    <p class="forced-plan-duration">{{ block.duration_minutes }} minutes</p>
+                    <p class="forced-plan-instruction">{{ block.instruction }}</p>
+                    <p class="forced-plan-reason">{{ block.reason }}</p>
+                  </article>
+                {% endfor %}
+              </div>
+            </section>
+
+            <section class="prediction-panel">
+              <div class="prediction-copy">
+                <p class="eyebrow">Next best move</p>
+                <h2>{{ dashboard.next_best_action.title }}</h2>
+                <p class="prediction-meta">
+                  {{ dashboard.next_best_action.item_kind }}
+                  {% if dashboard.next_best_action.exam_type %}
+                    • {{ dashboard.next_best_action.exam_type }}
+                  {% endif %}
+                  • {{ dashboard.next_best_action.importance }}
+                </p>
+                <p class="prediction-text">{{ dashboard.next_best_action.action }}</p>
+              </div>
+              <div class="prediction-stats">
+                <div class="prediction-chip">
+                  <span>Urgency</span>
+                  <strong>{{ dashboard.next_best_action.urgency_text }}</strong>
+                </div>
+                <div class="prediction-chip">
+                  <span>Confidence</span>
+                  <strong>{{ dashboard.next_best_action.confidence_percent }}%</strong>
+                </div>
+                <div class="prediction-chip">
+                  <span>Coverage</span>
+                  <strong>{{ dashboard.next_best_action.studied_minutes }} min</strong>
+                </div>
+              </div>
+            </section>
+
+            <main class="content-grid">
+              <section class="panel analytics-panel">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">Dashboard</p>
+                    <h2>Weekly progress</h2>
+                  </div>
+                </div>
+                <div id="weeklyChart" class="chart-bars" data-chart='{{ dashboard.weekly_activity | tojson }}'></div>
+              </section>
+
+              <section class="panel subjects-panel">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">Dashboard</p>
+                    <h2>Subject breakdown</h2>
+                  </div>
+                </div>
+                <div class="subject-list">
+                  {% if dashboard.subject_breakdown %}
+                    {% set max_minutes = dashboard.subject_breakdown[0].minutes %}
+                    {% for item in dashboard.subject_breakdown %}
+                      <article class="subject-item">
+                        <div class="subject-row">
+                          <strong>{{ item.subject }}</strong>
+                          <span>{{ item.minutes }} min</span>
+                        </div>
+                        <div class="subject-bar">
+                          <span style="width: {{ (item.minutes / max_minutes * 100) if max_minutes else 0 }}%"></span>
+                        </div>
+                      </article>
+                    {% endfor %}
+                  {% else %}
+                    <p class="empty-state">No sessions yet. Start the timer or log your first study block.</p>
+                  {% endif %}
+                </div>
+              </section>
+
+              <section class="panel history-panel">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">History</p>
+                    <h2>Recent sessions</h2>
+                  </div>
+                </div>
+                {% if dashboard.recent_sessions %}
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Subject</th>
+                          <th>Duration</th>
+                          <th>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for session in dashboard.recent_sessions %}
+                          <tr>
+                            <td>{{ session.subject }}</td>
+                            <td>{{ session.duration_minutes }} min</td>
+                            <td>{{ session.session_date }}</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% else %}
+                  <p class="empty-state">Your saved sessions will appear here.</p>
+                {% endif %}
+              </section>
+            </main>
+          </section>
+
+          <section class="app-view" data-view="focus">
+            <div class="view-header">
+              <div>
+                <p class="eyebrow">Focus</p>
+                <h2>Timer and session logging</h2>
+              </div>
             </div>
-          {% else %}
-            <p class="empty-state">Your saved sessions will appear here.</p>
-          {% endif %}
-        </section>
-      </main>
+            <div class="content-grid focus-view-grid">
+              <section class="panel timer-panel">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">Focus mode</p>
+                    <h2>Study timer</h2>
+                  </div>
+                  <button type="button" id="focusToggle" class="ghost-button">Open focus view</button>
+                </div>
+                <div class="timer-shell" data-today="{{ today }}">
+                  <div class="timer-display-wrap">
+                    <p id="timerPhase" class="timer-phase">Regular session</p>
+                    <div id="timerDisplay" class="timer-display">00:00:00</div>
+                    <p id="timerHint" class="timer-hint">Start a session or switch to Pomodoro for 25/5 cycles.</p>
+                  </div>
+                  <div class="timer-settings">
+                    <label>
+                      <span>Upcoming target</span>
+                      <select id="focusTargetSelect">
+                        <option value="">Choose exam or project</option>
+                        {% for item in dashboard.upcoming_items %}
+                          <option value="{{ item.title }}">{{ item.item_kind }} • {{ item.title }}</option>
+                        {% endfor %}
+                        {% for block in dashboard.forced_plan.blocks %}
+                          <option value="{{ block.subject }}">Forced plan • {{ block.subject }}</option>
+                        {% endfor %}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Subject</span>
+                      <input id="timerSubject" type="text" placeholder="Mathematics">
+                    </label>
+                    <label>
+                      <span>Mode</span>
+                      <select id="timerMode">
+                        <option value="regular">Regular timer</option>
+                        <option value="pomodoro">Pomodoro 25/5</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="timer-actions">
+                    <button type="button" id="startTimer">Start</button>
+                    <button type="button" id="pauseTimer" class="ghost-button">Pause</button>
+                    <button type="button" id="resetTimer" class="ghost-button">Reset</button>
+                    <button type="button" id="saveTimerSession" class="secondary-button">Save session</button>
+                  </div>
+                  <p id="timerStatus" class="status-text" aria-live="polite"></p>
+                </div>
+              </section>
+
+              <section class="panel log-panel">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">Session logging</p>
+                    <h2>Add a study block</h2>
+                  </div>
+                </div>
+                <form action="{{ url_for('create_session') }}" method="post" class="session-form">
+                  <label>
+                    <span>Subject</span>
+                    <input type="text" name="subject" placeholder="Physics" required>
+                  </label>
+                  <label>
+                    <span>Duration (minutes)</span>
+                    <input type="number" name="duration_minutes" min="1" step="1" placeholder="45" required>
+                  </label>
+                  <label>
+                    <span>Date</span>
+                    <input type="date" name="session_date" value="{{ today }}">
+                  </label>
+                  <button type="submit">Save session</button>
+                </form>
+                <div class="mini-metrics">
+                  <article class="mini-card">
+                    <span>This month focused time</span>
+                    <strong>{{ dashboard.total_minutes }} minutes</strong>
+                  </article>
+                  <article class="mini-card">
+                    <span>XP earned</span>
+                    <strong>{{ dashboard.xp }} XP</strong>
+                  </article>
+                  <article class="mini-card">
+                    <span>Consistency title</span>
+                    <strong>{{ dashboard.title }}</strong>
+                  </article>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="app-view" data-view="planner">
+            <div class="view-header">
+              <div>
+                <p class="eyebrow">Planner</p>
+                <h2>Exams and projects</h2>
+              </div>
+            </div>
+            <section class="panel planner-panel">
+              <div class="planner-layout">
+                <form action="{{ url_for('create_academic_item') }}" method="post" class="planner-form">
+                  <label><span>Title</span><input type="text" name="title" placeholder="Linear Algebra midterm" required></label>
+                  <label><span>Type</span><select name="item_kind" required><option value="exam">Exam</option><option value="project">Project</option></select></label>
+                  <label><span>Exam type</span><input type="text" name="exam_type" placeholder="Written, oral, lab, practical"></label>
+                  <label><span>Importance</span><select name="importance" required><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+                  <label class="confidence-input-group">
+                    <span>Confidence (%)</span>
+                    <div class="confidence-slider-row">
+                      <input type="range" name="confidence_percent" min="0" max="100" step="1" value="72" data-confidence-slider>
+                      <strong class="confidence-slider-value" data-confidence-value>72%</strong>
+                    </div>
+                  </label>
+                  <label><span>Due date</span><input type="date" name="due_date" required></label>
+                  <button type="submit">Save upcoming item</button>
+                </form>
+                <div class="planner-list">
+                  {% if dashboard.upcoming_items %}
+                    {% for item in dashboard.upcoming_items %}
+                      <article class="planner-item">
+                        <div class="planner-item-top">
+                          <div>
+                            <p class="planner-item-kind">{{ item.item_kind }}</p>
+                            <h3>{{ item.title }}</h3>
+                          </div>
+                          <span class="planner-importance planner-importance-{{ item.importance.lower() }}">{{ item.importance }}</span>
+                        </div>
+                        <p class="planner-meta">{% if item.exam_type %}{{ item.exam_type }} • {% endif %}Due {{ item.due_date }}</p>
+                        <p class="planner-meta">
+                          {% if item.days_left > 0 %}
+                            {{ item.days_left }} day{{ '' if item.days_left == 1 else 's' }} left
+                          {% elif item.days_left == 0 %}
+                            Due today
+                          {% else %}
+                            {{ (item.days_left * -1) }} day{{ '' if item.days_left == -1 else 's' }} overdue
+                          {% endif %}
+                        </p>
+                        <div class="confidence-bar"><span style="width: {{ item.confidence_percent }}%"></span></div>
+                        <p class="planner-confidence">Confidence: {{ item.confidence_percent }}%</p>
+                      </article>
+                    {% endfor %}
+                  {% else %}
+                    <p class="empty-state">Add your next exam or project so the app can keep the pressure visible.</p>
+                  {% endif %}
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section class="app-view" data-view="friends">
+            <div class="view-header">
+              <div>
+                <p class="eyebrow">People</p>
+                <h2>Friends connections</h2>
+              </div>
+            </div>
+            <section class="panel friends-page">
+              <div class="friend-list">
+                <article class="friend-item"><span class="friend-avatar">AL</span><div><strong>Alya</strong><small>Deep work streak: 6 days</small></div></article>
+                <article class="friend-item"><span class="friend-avatar">KM</span><div><strong>Kamal</strong><small>Preparing for finals</small></div></article>
+                <article class="friend-item"><span class="friend-avatar">SR</span><div><strong>Sara</strong><small>Project sprint this week</small></div></article>
+              </div>
+            </section>
+          </section>
+
+          <section class="app-view" data-view="settings">
+            <div class="view-header">
+              <div>
+                <p class="eyebrow">Settings</p>
+                <h2>Account and appearance</h2>
+              </div>
+            </div>
+            <div class="content-grid settings-view-grid">
+              <section class="panel">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">Account</p>
+                    <h2>Profile settings</h2>
+                  </div>
+                </div>
+                <button type="button" class="account-button sidebar-account-button" aria-label="Open account login" data-open-account="true">
+                  <span class="account-avatar">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"></path></svg>
+                  </span>
+                  <span class="account-copy">
+                    <strong>Student Profile</strong>
+                    <small>Notifications, login, sync</small>
+                  </span>
+                </button>
+                <div class="settings-list">
+                  <div class="settings-item"><span>Email reminders</span><strong>Off</strong></div>
+                  <div class="settings-item"><span>Focus alerts</span><strong>On</strong></div>
+                  <div class="settings-item"><span>Weekly summary</span><strong>Friday</strong></div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">Appearance</p>
+                    <h2>Theme option</h2>
+                  </div>
+                </div>
+                <div id="appThemeOptions" class="app-theme-options" aria-label="App theme options"></div>
+                <div class="sidebar-subsection">
+                  <p class="eyebrow">Focus wallpaper</p>
+                  <div id="focusThemeOptions" class="focus-theme-options sidebar-focus-theme-options" aria-label="Focus themes"></div>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
 
     <div id="focusOverlay" class="focus-overlay" hidden>

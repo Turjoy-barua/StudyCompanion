@@ -43,6 +43,12 @@ FALLBACK_QUOTES = [
     },
 ]
 
+DEFAULT_PLAN_SUBJECTS = [
+    "Mathematics",
+    "Physics",
+    "Chemistry",
+]
+
 
 def get_connection() -> sqlite3.Connection:
     connection = sqlite3.connect(DB_PATH)
@@ -59,6 +65,20 @@ def init_db() -> None:
                 subject TEXT NOT NULL,
                 duration_minutes INTEGER NOT NULL CHECK(duration_minutes > 0),
                 session_date TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS academic_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                item_kind TEXT NOT NULL,
+                exam_type TEXT,
+                importance TEXT NOT NULL,
+                confidence_percent INTEGER NOT NULL CHECK(confidence_percent >= 0 AND confidence_percent <= 100),
+                due_date TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
             """
@@ -94,6 +114,80 @@ def fetch_sessions(limit: int | None = None) -> list[sqlite3.Row]:
         SELECT id, subject, duration_minutes, session_date, created_at
         FROM study_sessions
         ORDER BY session_date DESC, created_at DESC, id DESC
+    """
+    params: tuple[int, ...] = ()
+    if limit is not None:
+        query += " LIMIT ?"
+        params = (limit,)
+
+    with get_connection() as connection:
+        return connection.execute(query, params).fetchall()
+
+
+def add_academic_item(
+    title: str,
+    item_kind: str,
+    exam_type: str,
+    importance: str,
+    confidence_percent: int,
+    due_date: str,
+) -> None:
+    normalized_title = " ".join(title.strip().split())
+    normalized_kind = item_kind.strip().lower()
+    normalized_exam_type = " ".join(exam_type.strip().split())
+    normalized_importance = importance.strip().lower()
+
+    if not normalized_title:
+        raise ValueError("Title is required.")
+    if normalized_kind not in {"exam", "project"}:
+        raise ValueError("Type must be exam or project.")
+    if normalized_importance not in {"critical", "high", "medium", "low"}:
+        raise ValueError("Importance must be critical, high, medium, or low.")
+    if not 0 <= confidence_percent <= 100:
+        raise ValueError("Confidence must be between 0 and 100.")
+
+    try:
+        datetime.strptime(due_date, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("Due date must use YYYY-MM-DD format.") from exc
+
+    if normalized_kind == "project":
+        normalized_exam_type = ""
+    elif not normalized_exam_type:
+        raise ValueError("Exam type is required for exams.")
+
+    created_at = datetime.now().isoformat(timespec="seconds")
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO academic_items (
+                title,
+                item_kind,
+                exam_type,
+                importance,
+                confidence_percent,
+                due_date,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                normalized_title,
+                normalized_kind,
+                normalized_exam_type,
+                normalized_importance,
+                confidence_percent,
+                due_date,
+                created_at,
+            ),
+        )
+
+
+def fetch_academic_items(limit: int | None = None) -> list[sqlite3.Row]:
+    query = """
+        SELECT id, title, item_kind, exam_type, importance, confidence_percent, due_date, created_at
+        FROM academic_items
+        ORDER BY due_date ASC, created_at ASC, id ASC
     """
     params: tuple[int, ...] = ()
     if limit is not None:
@@ -193,8 +287,214 @@ def get_daily_motivation() -> dict[str, str]:
     }
 
 
+def _build_next_best_action(
+    academic_items: list[sqlite3.Row],
+    subject_totals: dict[str, int],
+) -> dict:
+    today = date.today()
+    ranked_actions = []
+
+    for item in academic_items:
+        title = item["title"]
+        due_date = datetime.strptime(item["due_date"], "%Y-%m-%d").date()
+        days_left = (due_date - today).days
+        confidence_percent = int(item["confidence_percent"])
+        studied_minutes = subject_totals.get(title, 0)
+        importance_weight = {"critical": 45, "high": 30, "medium": 18, "low": 8}.get(item["importance"], 0)
+        urgency_weight = 40 if days_left <= 0 else max(0, 32 - (days_left * 4))
+        confidence_gap = 100 - confidence_percent
+        coverage_penalty = min(studied_minutes // 15, 18)
+        score = importance_weight + urgency_weight + confidence_gap - coverage_penalty
+
+        if item["item_kind"] == "exam":
+            action = "Do a timed problem set and then review only the mistakes."
+        else:
+            action = "Complete the highest-risk deliverable first, then polish the remaining pieces."
+
+        if days_left <= 0:
+            urgency_text = "Deadline is now."
+        elif days_left == 1:
+            urgency_text = "Due tomorrow."
+        else:
+            urgency_text = f"Due in {days_left} days."
+
+        ranked_actions.append(
+            {
+                "title": title,
+                "item_kind": item["item_kind"].title(),
+                "exam_type": item["exam_type"],
+                "importance": item["importance"].title(),
+                "confidence_percent": confidence_percent,
+                "days_left": days_left,
+                "studied_minutes": studied_minutes,
+                "score": score,
+                "action": action,
+                "urgency_text": urgency_text,
+            }
+        )
+
+    ranked_actions.sort(key=lambda item: item["score"], reverse=True)
+    if not ranked_actions:
+        return {
+            "title": "No urgent exam or project yet",
+            "item_kind": "Study",
+            "exam_type": "",
+            "importance": "Medium",
+            "confidence_percent": 0,
+            "days_left": None,
+            "studied_minutes": 0,
+            "score": 0,
+            "action": "Add an upcoming exam or project so the planner can predict the most important next move.",
+            "urgency_text": "Nothing to rank yet.",
+        }
+
+    return ranked_actions[0]
+
+
+def _build_daily_forced_plan(sessions: list[sqlite3.Row], academic_items: list[sqlite3.Row]) -> dict:
+    today = date.today()
+    subject_minutes: dict[str, int] = defaultdict(int)
+    last_studied: dict[str, date] = {}
+
+    for session in sessions:
+        subject = session["subject"]
+        session_day = datetime.strptime(session["session_date"], "%Y-%m-%d").date()
+        duration = int(session["duration_minutes"])
+        subject_minutes[subject] += duration
+        if subject not in last_studied or session_day > last_studied[subject]:
+            last_studied[subject] = session_day
+
+    ranked_subjects = sorted(
+        subject_minutes.keys(),
+        key=lambda subject: (
+            last_studied.get(subject, date.min),
+            subject_minutes[subject],
+            subject.lower(),
+        ),
+    )
+
+    urgent_items = []
+    for item in academic_items:
+        due_date = datetime.strptime(item["due_date"], "%Y-%m-%d").date()
+        days_left = (due_date - today).days
+        urgency_score = (
+            max(days_left, -7),
+            {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(item["importance"], 4),
+            int(item["confidence_percent"]),
+        )
+        urgent_items.append(
+            {
+                "title": item["title"],
+                "item_kind": item["item_kind"].title(),
+                "exam_type": item["exam_type"],
+                "importance": item["importance"].title(),
+                "confidence_percent": int(item["confidence_percent"]),
+                "days_left": days_left,
+                "urgency_score": urgency_score,
+            }
+        )
+
+    urgent_items.sort(key=lambda item: item["urgency_score"])
+
+    selected_subjects: list[dict[str, str | int]] = []
+    for item in urgent_items[:3]:
+        selected_subjects.append(
+            {
+                "subject": item["title"],
+                "item_kind": item["item_kind"],
+                "exam_type": item["exam_type"],
+                "importance": item["importance"],
+                "confidence_percent": item["confidence_percent"],
+                "days_left": item["days_left"],
+                "source": "upcoming",
+            }
+        )
+
+    for subject in ranked_subjects:
+        if len(selected_subjects) >= 3:
+            break
+        if any(entry["subject"] == subject for entry in selected_subjects):
+            continue
+        selected_subjects.append(
+            {
+                "subject": subject,
+                "item_kind": "Study",
+                "exam_type": "",
+                "importance": "",
+                "confidence_percent": 0,
+                "days_left": None,
+                "source": "history",
+            }
+        )
+
+    while len(selected_subjects) < 3:
+        fallback_subject = DEFAULT_PLAN_SUBJECTS[len(selected_subjects) % len(DEFAULT_PLAN_SUBJECTS)]
+        if any(entry["subject"] == fallback_subject for entry in selected_subjects):
+            continue
+        selected_subjects.append(
+            {
+                "subject": fallback_subject,
+                "item_kind": "Study",
+                "exam_type": "",
+                "importance": "",
+                "confidence_percent": 0,
+                "days_left": None,
+                "source": "fallback",
+            }
+        )
+
+    base_blocks = [50, 35, 25]
+    energy_cycle = [
+        "Start with the hardest chapter or problem set only.",
+        "Review notes, examples, and mistakes without switching subjects.",
+        "End with active recall: solve, recite, or summarize from memory.",
+    ]
+
+    blocks = []
+    total_minutes = 0
+    for index, plan_item in enumerate(selected_subjects):
+        subject = str(plan_item["subject"])
+        duration = base_blocks[index]
+        total_minutes += duration
+        if plan_item["source"] == "upcoming":
+            days_left = int(plan_item["days_left"])
+            if days_left <= 0:
+                reason = f"{plan_item['item_kind']} deadline is here. Do not postpone it."
+            elif days_left == 1:
+                reason = f"{plan_item['item_kind']} is due tomorrow. This gets priority now."
+            else:
+                reason = f"{plan_item['item_kind']} is due in {days_left} days and confidence is {plan_item['confidence_percent']}%."
+        else:
+            last_day = last_studied.get(subject)
+            if last_day is None:
+                reason = "New priority today. Build momentum."
+            else:
+                days_away = (today - last_day).days
+                reason = "You have not touched this recently." if days_away >= 2 else "Keep this subject warm today."
+
+        blocks.append(
+            {
+                "order": index + 1,
+                "subject": subject,
+                "item_kind": plan_item["item_kind"],
+                "exam_type": plan_item["exam_type"],
+                "duration_minutes": duration,
+                "instruction": energy_cycle[index],
+                "reason": reason,
+            }
+        )
+
+    return {
+        "headline": "Daily forced plan",
+        "summary": "No deciding. Follow these blocks in order and finish the day clean.",
+        "total_minutes": total_minutes,
+        "blocks": blocks,
+    }
+
+
 def get_dashboard_data() -> dict:
     sessions = fetch_sessions()
+    academic_items = fetch_academic_items(limit=8)
     today = date.today()
     today_iso = today.isoformat()
     current_month = today.month
@@ -253,6 +553,24 @@ def get_dashboard_data() -> dict:
         for session_date, minutes in activity_map.items()
     ]
     motivation = get_daily_motivation()
+    forced_plan = _build_daily_forced_plan(sessions, academic_items)
+    next_best_action = _build_next_best_action(academic_items, subject_totals)
+    upcoming_items = []
+    for item in academic_items:
+        due_date = datetime.strptime(item["due_date"], "%Y-%m-%d").date()
+        days_left = (due_date - today).days
+        upcoming_items.append(
+            {
+                "id": item["id"],
+                "title": item["title"],
+                "item_kind": item["item_kind"].title(),
+                "exam_type": item["exam_type"],
+                "importance": item["importance"].title(),
+                "confidence_percent": int(item["confidence_percent"]),
+                "due_date": item["due_date"],
+                "days_left": days_left,
+            }
+        )
 
     return {
         "today_minutes": today_minutes,
@@ -266,4 +584,7 @@ def get_dashboard_data() -> dict:
         "weekly_activity": weekly_activity,
         "recent_sessions": recent_sessions,
         "motivation": motivation,
+        "forced_plan": forced_plan,
+        "next_best_action": next_best_action,
+        "upcoming_items": upcoming_items,
     }

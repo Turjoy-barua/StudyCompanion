@@ -12,7 +12,7 @@ from supabase_client import get_supabase_client
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "database.db"
+DB_PATH = Path("/tmp/study-companion.db") if os.environ.get("VERCEL") else BASE_DIR / "database.db"
 QUOTES_CSV_PATH = BASE_DIR / "insparation.csv"
 KAGGLE_QUOTES_DATASET = "mattimansha/inspirational-quotes"
 KAGGLE_QUOTES_FILE_PATH = os.environ.get("KAGGLE_QUOTES_FILE_PATH", "")

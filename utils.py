@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import csv
 import os
+import random
 import sqlite3
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from functools import lru_cache
 from pathlib import Path
+
+from supabase_client import get_supabase_client
 
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "database.db"
+QUOTES_CSV_PATH = BASE_DIR / "insparation.csv"
 KAGGLE_QUOTES_DATASET = "mattimansha/inspirational-quotes"
 KAGGLE_QUOTES_FILE_PATH = os.environ.get("KAGGLE_QUOTES_FILE_PATH", "")
 
@@ -49,6 +53,9 @@ DEFAULT_PLAN_SUBJECTS = [
     "Chemistry",
 ]
 
+SessionRecord = dict[str, object]
+AcademicItemRecord = dict[str, object]
+
 
 def get_connection() -> sqlite3.Connection:
     connection = sqlite3.connect(DB_PATH)
@@ -85,6 +92,36 @@ def init_db() -> None:
         )
 
 
+def _get_supabase() -> object | None:
+    try:
+        return get_supabase_client()
+    except Exception:
+        return None
+
+
+def _normalize_session_record(record: dict[str, object]) -> SessionRecord:
+    return {
+        "id": record.get("id"),
+        "subject": record.get("subject", ""),
+        "duration_minutes": int(record.get("duration_minutes", 0) or 0),
+        "session_date": str(record.get("session_date", "")),
+        "created_at": str(record.get("created_at", "")),
+    }
+
+
+def _normalize_academic_item_record(record: dict[str, object]) -> AcademicItemRecord:
+    return {
+        "id": record.get("id"),
+        "title": record.get("title", ""),
+        "item_kind": record.get("item_kind", ""),
+        "exam_type": record.get("exam_type") or "",
+        "importance": record.get("importance", ""),
+        "confidence_percent": int(record.get("confidence_percent", 0) or 0),
+        "due_date": str(record.get("due_date", "")),
+        "created_at": str(record.get("created_at", "")),
+    }
+
+
 def add_session(subject: str, duration_minutes: int, session_date: str | None = None) -> None:
     normalized_subject = " ".join(subject.strip().split())
     if not normalized_subject:
@@ -99,6 +136,21 @@ def add_session(subject: str, duration_minutes: int, session_date: str | None = 
         raise ValueError("Session date must use YYYY-MM-DD format.") from exc
 
     created_at = datetime.now().isoformat(timespec="seconds")
+    supabase = _get_supabase()
+    if supabase is not None:
+        try:
+            supabase.table("study_sessions").insert(
+                {
+                    "subject": normalized_subject,
+                    "duration_minutes": duration_minutes,
+                    "session_date": session_day,
+                    "created_at": created_at,
+                }
+            ).execute()
+            return
+        except Exception:
+            pass
+
     with get_connection() as connection:
         connection.execute(
             """
@@ -109,7 +161,20 @@ def add_session(subject: str, duration_minutes: int, session_date: str | None = 
         )
 
 
-def fetch_sessions(limit: int | None = None) -> list[sqlite3.Row]:
+def fetch_sessions(limit: int | None = None) -> list[SessionRecord]:
+    supabase = _get_supabase()
+    if supabase is not None:
+        try:
+            query = supabase.table("study_sessions").select(
+                "id, subject, duration_minutes, session_date, created_at"
+            ).order("session_date", desc=True).order("created_at", desc=True).order("id", desc=True)
+            if limit is not None:
+                query = query.limit(limit)
+            response = query.execute()
+            return [_normalize_session_record(record) for record in response.data or []]
+        except Exception:
+            pass
+
     query = """
         SELECT id, subject, duration_minutes, session_date, created_at
         FROM study_sessions
@@ -121,7 +186,8 @@ def fetch_sessions(limit: int | None = None) -> list[sqlite3.Row]:
         params = (limit,)
 
     with get_connection() as connection:
-        return connection.execute(query, params).fetchall()
+        rows = connection.execute(query, params).fetchall()
+    return [_normalize_session_record(dict(row)) for row in rows]
 
 
 def add_academic_item(
@@ -157,6 +223,24 @@ def add_academic_item(
         raise ValueError("Exam type is required for exams.")
 
     created_at = datetime.now().isoformat(timespec="seconds")
+    supabase = _get_supabase()
+    if supabase is not None:
+        try:
+            supabase.table("academic_items").insert(
+                {
+                    "title": normalized_title,
+                    "item_kind": normalized_kind,
+                    "exam_type": normalized_exam_type,
+                    "importance": normalized_importance,
+                    "confidence_percent": confidence_percent,
+                    "due_date": due_date,
+                    "created_at": created_at,
+                }
+            ).execute()
+            return
+        except Exception:
+            pass
+
     with get_connection() as connection:
         connection.execute(
             """
@@ -183,7 +267,20 @@ def add_academic_item(
         )
 
 
-def fetch_academic_items(limit: int | None = None) -> list[sqlite3.Row]:
+def fetch_academic_items(limit: int | None = None) -> list[AcademicItemRecord]:
+    supabase = _get_supabase()
+    if supabase is not None:
+        try:
+            query = supabase.table("academic_items").select(
+                "id, title, item_kind, exam_type, importance, confidence_percent, due_date, created_at"
+            ).order("due_date", desc=False).order("created_at", desc=False).order("id", desc=False)
+            if limit is not None:
+                query = query.limit(limit)
+            response = query.execute()
+            return [_normalize_academic_item_record(record) for record in response.data or []]
+        except Exception:
+            pass
+
     query = """
         SELECT id, title, item_kind, exam_type, importance, confidence_percent, due_date, created_at
         FROM academic_items
@@ -195,7 +292,8 @@ def fetch_academic_items(limit: int | None = None) -> list[sqlite3.Row]:
         params = (limit,)
 
     with get_connection() as connection:
-        return connection.execute(query, params).fetchall()
+        rows = connection.execute(query, params).fetchall()
+    return [_normalize_academic_item_record(dict(row)) for row in rows]
 
 
 def _calculate_streak(session_dates: set[date]) -> int:
@@ -220,11 +318,10 @@ def _resolve_title(xp: int) -> str:
     return current_title
 
 
-def _pick_daily_item(items: list[dict[str, str]]) -> dict[str, str]:
+def _pick_random_item(items: list[dict[str, str]]) -> dict[str, str]:
     if not items:
         return {"text": "", "author": ""}
-    day_index = date.today().toordinal() % len(items)
-    return items[day_index]
+    return random.choice(items)
 
 
 def _extract_quote_records(dataframe) -> list[dict[str, str]]:
@@ -254,41 +351,42 @@ def _extract_quote_records(dataframe) -> list[dict[str, str]]:
     return records
 
 
-@lru_cache(maxsize=1)
-def _load_kaggle_quotes() -> list[dict[str, str]]:
-    if not KAGGLE_QUOTES_FILE_PATH:
+def _load_csv_quotes() -> list[dict[str, str]]:
+    if not QUOTES_CSV_PATH.exists():
         return []
 
     try:
-        import kagglehub
-        from kagglehub import KaggleDatasetAdapter
-    except ImportError:
+        with QUOTES_CSV_PATH.open(newline="", encoding="utf-8") as csv_file:
+            reader = csv.DictReader(csv_file)
+            records = []
+            for row in reader:
+                quote_text = " ".join(str(row.get("Quote", "")).split()).strip()
+                category = " ".join(str(row.get("Category", "")).split()).strip()
+                if not quote_text:
+                    continue
+                records.append(
+                    {
+                        "text": quote_text,
+                        "author": category or "Inspiration",
+                    }
+                )
+            return records
+    except OSError:
         return []
-
-    try:
-        dataframe = kagglehub.load_dataset(
-            KaggleDatasetAdapter.PANDAS,
-            KAGGLE_QUOTES_DATASET,
-            KAGGLE_QUOTES_FILE_PATH,
-        )
-    except Exception:
-        return []
-
-    return _extract_quote_records(dataframe)
 
 
 def get_daily_motivation() -> dict[str, str]:
-    quotes = _load_kaggle_quotes() or FALLBACK_QUOTES
-    quote = _pick_daily_item(quotes)
+    quotes = _load_csv_quotes() or FALLBACK_QUOTES
+    quote = _pick_random_item(quotes)
     return {
         "text": quote["text"],
         "author": quote["author"] or "Study Companion",
-        "source": "kaggle" if quotes is not FALLBACK_QUOTES else "fallback",
+        "source": "csv" if quotes is not FALLBACK_QUOTES else "fallback",
     }
 
 
 def _build_next_best_action(
-    academic_items: list[sqlite3.Row],
+    academic_items: list[AcademicItemRecord],
     subject_totals: dict[str, int],
 ) -> dict:
     today = date.today()
@@ -351,7 +449,7 @@ def _build_next_best_action(
     return ranked_actions[0]
 
 
-def _build_daily_forced_plan(sessions: list[sqlite3.Row], academic_items: list[sqlite3.Row]) -> dict:
+def _build_daily_forced_plan(sessions: list[SessionRecord], academic_items: list[AcademicItemRecord]) -> dict:
     today = date.today()
     subject_minutes: dict[str, int] = defaultdict(int)
     last_studied: dict[str, date] = {}
@@ -538,7 +636,7 @@ def get_dashboard_data() -> dict:
                 }
             )
 
-    xp = total_minutes * 10
+    xp = total_minutes
     level = (xp // 500) + 1 if xp else 1
     subject_breakdown = [
         {"subject": subject, "minutes": minutes}

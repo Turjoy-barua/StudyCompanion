@@ -3,10 +3,13 @@ from __future__ import annotations
 import os
 from datetime import date
 
+from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 
 from utils import add_academic_item, add_session, get_dashboard_data, init_db
 
+
+load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "study-companion-dev")

@@ -34,7 +34,18 @@ def _get_current_user() -> dict[str, str] | None:
     email = session.get("current_user_email")
     if not user_id or not email:
         return None
-    return {"id": user_id, "email": email}
+    display_name = email.split("@", 1)[0].replace(".", " ").replace("_", " ").strip().title()
+    return {
+        "id": user_id,
+        "email": email,
+        "display_name": display_name or "Student",
+        "provider": "Email",
+    }
+
+
+def _require_user_id() -> str | None:
+    current_user = _get_current_user()
+    return current_user["id"] if current_user else None
 
 
 def _get_authenticated_supabase():
@@ -48,12 +59,15 @@ def _get_authenticated_supabase():
 
     try:
         client = create_authenticated_supabase_client(access_token, refresh_token)
-        auth_session = client.auth.get_session()
-        if auth_session is not None:
-            session["supabase_access_token"] = auth_session.access_token
-            session["supabase_refresh_token"] = auth_session.refresh_token
-            session["current_user_id"] = auth_session.user.id
-            session["current_user_email"] = auth_session.user.email or ""
+        response = client.auth.set_session(access_token, refresh_token)
+        if response.session is not None and response.user is not None:
+            session["supabase_access_token"] = response.session.access_token
+            session["supabase_refresh_token"] = response.session.refresh_token
+            session["current_user_id"] = response.user.id
+            session["current_user_email"] = response.user.email or ""
+        else:
+            _clear_auth_session()
+            return None
         return client
     except Exception:
         _clear_auth_session()
@@ -123,11 +137,19 @@ def login():
         flash("Email and password are required.", "error")
         return redirect(url_for("index"))
 
+    _clear_auth_session()
+
     try:
         client = create_supabase_client()
         response = client.auth.sign_in_with_password({"email": email, "password": password})
-    except Exception:
-        flash("Login failed. Check your email and password.", "error")
+    except Exception as exc:
+        error_text = str(exc).strip() or "Login failed."
+        if "Invalid login credentials" in error_text:
+            error_text = (
+                "Login failed. If you only added the email in Supabase, make sure that user also has a password "
+                "and is confirmed."
+            )
+        flash(error_text, "error")
         return redirect(url_for("index"))
 
     if response.session is None or response.user is None:
@@ -163,7 +185,13 @@ def create_session():
 
     try:
         duration_minutes = _parse_duration_minutes(request.form.get("duration_minutes", ""))
-        add_session(subject, duration_minutes, session_date, supabase=_get_authenticated_supabase())
+        add_session(
+            subject,
+            duration_minutes,
+            session_date,
+            supabase=_get_authenticated_supabase(),
+            user_id=_require_user_id(),
+        )
     except ValueError as exc:
         flash(str(exc), "error")
     else:
@@ -180,10 +208,12 @@ def create_academic_item():
             request.form.get("title", ""),
             request.form.get("item_kind", ""),
             request.form.get("exam_type", ""),
+            request.form.get("chapters", ""),
             request.form.get("importance", ""),
             _parse_confidence(request.form.get("confidence_percent", "")),
             request.form.get("due_date", ""),
             supabase=_get_authenticated_supabase(),
+            user_id=_require_user_id(),
         )
     except ValueError as exc:
         flash(str(exc), "error")
@@ -204,7 +234,13 @@ def create_session_api():
 
     try:
         duration_minutes = _parse_duration_minutes(str(payload.get("duration_minutes", "")))
-        add_session(subject, duration_minutes, session_date, supabase=_get_authenticated_supabase())
+        add_session(
+            subject,
+            duration_minutes,
+            session_date,
+            supabase=_get_authenticated_supabase(),
+            user_id=_require_user_id(),
+        )
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
 

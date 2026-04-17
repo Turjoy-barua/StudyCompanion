@@ -13,6 +13,7 @@ create table if not exists academic_items (
   title text not null,
   item_kind text not null check (item_kind in ('exam', 'project')),
   exam_type text,
+  chapters text,
   importance text not null check (importance in ('critical', 'high', 'medium', 'low')),
   confidence_percent integer not null check (confidence_percent between 0 and 100),
   due_date date not null,
@@ -24,6 +25,9 @@ alter table study_sessions
 
 alter table academic_items
   add column if not exists user_id uuid references auth.users(id) on delete cascade default auth.uid();
+
+alter table academic_items
+  add column if not exists chapters text;
 
 create index if not exists study_sessions_user_date_idx
   on study_sessions (user_id, session_date desc, created_at desc);

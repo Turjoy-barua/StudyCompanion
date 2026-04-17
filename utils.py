@@ -47,12 +47,6 @@ FALLBACK_QUOTES = [
     },
 ]
 
-DEFAULT_PLAN_SUBJECTS = [
-    "Mathematics",
-    "Physics",
-    "Chemistry",
-]
-
 SessionRecord = dict[str, object]
 AcademicItemRecord = dict[str, object]
 SUPABASE_ENABLED = bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_ANON_KEY"))
@@ -84,6 +78,7 @@ def init_db() -> None:
                 title TEXT NOT NULL,
                 item_kind TEXT NOT NULL,
                 exam_type TEXT,
+                chapters TEXT,
                 importance TEXT NOT NULL,
                 confidence_percent INTEGER NOT NULL CHECK(confidence_percent >= 0 AND confidence_percent <= 100),
                 due_date TEXT NOT NULL,
@@ -91,6 +86,11 @@ def init_db() -> None:
             )
             """
         )
+        try:
+            connection.execute("ALTER TABLE academic_items ADD COLUMN chapters TEXT")
+        except sqlite3.OperationalError:
+            pass
+        
 
 
 def _get_supabase(supabase: object | None = None) -> object | None:
@@ -120,6 +120,7 @@ def _normalize_academic_item_record(record: dict[str, object]) -> AcademicItemRe
         "title": record.get("title", ""),
         "item_kind": record.get("item_kind", ""),
         "exam_type": record.get("exam_type") or "",
+        "chapters": record.get("chapters") or "",
         "importance": record.get("importance", ""),
         "confidence_percent": int(record.get("confidence_percent", 0) or 0),
         "due_date": str(record.get("due_date", "")),
@@ -132,6 +133,7 @@ def add_session(
     duration_minutes: int,
     session_date: str | None = None,
     supabase: object | None = None,
+    user_id: str | None = None,
 ) -> None:
     normalized_subject = " ".join(subject.strip().split())
     if not normalized_subject:
@@ -151,6 +153,7 @@ def add_session(
         try:
             supabase.table("study_sessions").insert(
                 {
+                    "user_id": user_id,
                     "subject": normalized_subject,
                     "duration_minutes": duration_minutes,
                     "session_date": session_day,
@@ -158,9 +161,9 @@ def add_session(
                 }
             ).execute()
             return
-        except Exception:
+        except Exception as exc:
             if SUPABASE_ENABLED:
-                raise ValueError("Could not save the session to Supabase.")
+                raise ValueError(f"Could not save the session to Supabase. {exc}")
 
     if SUPABASE_ENABLED:
         raise ValueError("Login is required before saving a session.")
@@ -212,14 +215,17 @@ def add_academic_item(
     title: str,
     item_kind: str,
     exam_type: str,
+    chapters: str,
     importance: str,
     confidence_percent: int,
     due_date: str,
     supabase: object | None = None,
+    user_id: str | None = None,
 ) -> None:
     normalized_title = " ".join(title.strip().split())
     normalized_kind = item_kind.strip().lower()
     normalized_exam_type = " ".join(exam_type.strip().split())
+    normalized_chapters = " ".join(chapters.strip().split())
     normalized_importance = importance.strip().lower()
 
     if not normalized_title:
@@ -247,9 +253,11 @@ def add_academic_item(
         try:
             supabase.table("academic_items").insert(
                 {
+                    "user_id": user_id,
                     "title": normalized_title,
                     "item_kind": normalized_kind,
                     "exam_type": normalized_exam_type,
+                    "chapters": normalized_chapters,
                     "importance": normalized_importance,
                     "confidence_percent": confidence_percent,
                     "due_date": due_date,
@@ -257,9 +265,9 @@ def add_academic_item(
                 }
             ).execute()
             return
-        except Exception:
+        except Exception as exc:
             if SUPABASE_ENABLED:
-                raise ValueError("Could not save the upcoming item to Supabase.")
+                raise ValueError(f"Could not save the upcoming item to Supabase. {exc}")
 
     if SUPABASE_ENABLED:
         raise ValueError("Login is required before saving an upcoming item.")
@@ -271,17 +279,19 @@ def add_academic_item(
                 title,
                 item_kind,
                 exam_type,
+                chapters,
                 importance,
                 confidence_percent,
                 due_date,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 normalized_title,
                 normalized_kind,
                 normalized_exam_type,
+                normalized_chapters,
                 normalized_importance,
                 confidence_percent,
                 due_date,
@@ -295,7 +305,7 @@ def fetch_academic_items(limit: int | None = None, supabase: object | None = Non
     if supabase is not None:
         try:
             query = supabase.table("academic_items").select(
-                "id, title, item_kind, exam_type, importance, confidence_percent, due_date, created_at, user_id"
+                "id, title, item_kind, exam_type, chapters, importance, confidence_percent, due_date, created_at, user_id"
             ).order("due_date", desc=False).order("created_at", desc=False).order("id", desc=False)
             if limit is not None:
                 query = query.limit(limit)
@@ -309,7 +319,7 @@ def fetch_academic_items(limit: int | None = None, supabase: object | None = Non
         return []
 
     query = """
-        SELECT id, title, item_kind, exam_type, importance, confidence_percent, due_date, created_at
+        SELECT id, title, item_kind, exam_type, chapters, importance, confidence_percent, due_date, created_at
         FROM academic_items
         ORDER BY due_date ASC, created_at ASC, id ASC
     """
@@ -552,21 +562,13 @@ def _build_daily_forced_plan(sessions: list[SessionRecord], academic_items: list
             }
         )
 
-    while len(selected_subjects) < 3:
-        fallback_subject = DEFAULT_PLAN_SUBJECTS[len(selected_subjects) % len(DEFAULT_PLAN_SUBJECTS)]
-        if any(entry["subject"] == fallback_subject for entry in selected_subjects):
-            continue
-        selected_subjects.append(
-            {
-                "subject": fallback_subject,
-                "item_kind": "Study",
-                "exam_type": "",
-                "importance": "",
-                "confidence_percent": 0,
-                "days_left": None,
-                "source": "fallback",
-            }
-        )
+    if not selected_subjects:
+        return {
+            "headline": "Daily forced plan",
+            "summary": "Add an exam, project, or real study session first. The plan only uses your own data.",
+            "total_minutes": 0,
+            "blocks": [],
+        }
 
     base_blocks = [50, 35, 25]
     energy_cycle = [
@@ -690,6 +692,7 @@ def get_dashboard_data(supabase: object | None = None) -> dict:
                 "title": item["title"],
                 "item_kind": item["item_kind"].title(),
                 "exam_type": item["exam_type"],
+                "chapters": item["chapters"],
                 "importance": item["importance"].title(),
                 "confidence_percent": int(item["confidence_percent"]),
                 "due_date": item["due_date"],

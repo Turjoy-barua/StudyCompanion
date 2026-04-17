@@ -116,16 +116,20 @@
               </div>
 
               <div class="forced-plan-grid">
-                {% for block in dashboard.forced_plan.blocks %}
-                  <article class="forced-plan-step">
-                    <span class="forced-plan-order">Block {{ block.order }}</span>
-                    <p class="planner-item-kind">{{ block.item_kind }}{% if block.exam_type %} • {{ block.exam_type }}{% endif %}</p>
-                    <h3>{{ block.subject }}</h3>
-                    <p class="forced-plan-duration">{{ block.duration_minutes }} minutes</p>
-                    <p class="forced-plan-instruction">{{ block.instruction }}</p>
-                    <p class="forced-plan-reason">{{ block.reason }}</p>
-                  </article>
-                {% endfor %}
+                {% if dashboard.forced_plan.blocks %}
+                  {% for block in dashboard.forced_plan.blocks %}
+                    <article class="forced-plan-step">
+                      <span class="forced-plan-order">Block {{ block.order }}</span>
+                      <p class="planner-item-kind">{{ block.item_kind }}{% if block.exam_type %} • {{ block.exam_type }}{% endif %}</p>
+                      <h3>{{ block.subject }}</h3>
+                      <p class="forced-plan-duration">{{ block.duration_minutes }} minutes</p>
+                      <p class="forced-plan-instruction">{{ block.instruction }}</p>
+                      <p class="forced-plan-reason">{{ block.reason }}</p>
+                    </article>
+                  {% endfor %}
+                {% else %}
+                  <p class="empty-state">No forced plan yet. Add your own exams, projects, or study sessions first.</p>
+                {% endif %}
               </div>
             </section>
 
@@ -341,6 +345,10 @@
                   <label><span>Title</span><input type="text" name="title" placeholder="Linear Algebra midterm" required></label>
                   <label><span>Type</span><select name="item_kind" required><option value="exam">Exam</option><option value="project">Project</option></select></label>
                   <label><span>Exam type</span><input type="text" name="exam_type" placeholder="Written, oral, lab, practical"></label>
+                  <label class="planner-chapters-field">
+                    <span>Chapters / syllabus</span>
+                    <textarea name="chapters" rows="3" placeholder="Chapter 1: Limits, Chapter 2: Derivatives, Past paper sections A-B"></textarea>
+                  </label>
                   <label><span>Importance</span><select name="importance" required><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
                   <label class="confidence-input-group">
                     <span>Confidence (%)</span>
@@ -364,6 +372,9 @@
                           <span class="planner-importance planner-importance-{{ item.importance.lower() }}">{{ item.importance }}</span>
                         </div>
                         <p class="planner-meta">{% if item.exam_type %}{{ item.exam_type }} • {% endif %}Due {{ item.due_date }}</p>
+                        {% if item.chapters %}
+                          <p class="planner-chapters"><strong>Chapters:</strong> {{ item.chapters }}</p>
+                        {% endif %}
                         <p class="planner-meta">
                           {% if item.days_left > 0 %}
                             {{ item.days_left }} day{{ '' if item.days_left == 1 else 's' }} left
@@ -420,7 +431,7 @@
                   </span>
                   <span class="account-copy">
                     {% if current_user %}
-                      <strong>{{ current_user.email }}</strong>
+                      <strong>{{ current_user.display_name }}</strong>
                       <small>Supabase account connected</small>
                     {% else %}
                       <strong>Student Profile</strong>
@@ -430,6 +441,9 @@
                 </button>
                 <div class="settings-list">
                   <div class="settings-item"><span>Account status</span><strong>{{ "Connected" if current_user else "Guest" }}</strong></div>
+                  <div class="settings-item"><span>Email</span><strong>{{ current_user.email if current_user else "Not connected" }}</strong></div>
+                  <div class="settings-item"><span>Provider</span><strong>{{ current_user.provider if current_user else "Email" }}</strong></div>
+                  <div class="settings-item"><span>User ID</span><strong>{{ current_user.id[:8] ~ "..." if current_user else "No session" }}</strong></div>
                   <div class="settings-item"><span>Focus alerts</span><strong>On</strong></div>
                   <div class="settings-item"><span>Weekly summary</span><strong>Friday</strong></div>
                 </div>
@@ -494,7 +508,7 @@
 
           <p class="account-note">
             {% if auth_enabled %}
-              Only users already created in Supabase can log in here.
+              Only users already created in Supabase can log in here. If you only added the email, that user still needs a password in Supabase Auth.
             {% else %}
               Supabase authentication is not configured yet.
             {% endif %}

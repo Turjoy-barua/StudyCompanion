@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Study Companion</title>
+    <title>zenithstudy</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='study-companion-logo.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
@@ -14,7 +14,7 @@
           <div class="sidebar-brandmark">
             <img
               src="{{ url_for('static', filename='study-companion-logo.svg') }}"
-              alt="Study Companion logo"
+              alt="zenithstudy logo"
               class="brand-logo"
             >
           </div>
@@ -75,9 +75,11 @@
           <section class="app-view is-active" data-view="dashboard">
             <header class="hero">
               <div class="hero-copy">
-                <p class="eyebrow">Quote of the day</p>
-                <h1>“{{ dashboard.motivation.text }}”</h1>
-                <p class="hero-text">{{ dashboard.motivation.author }}</p>
+                <div class="hero-quote-body">
+                  <p class="eyebrow">Quote of the day</p>
+                  <h1>“{{ dashboard.motivation.text }}”</h1>
+                </div>
+                <p class="hero-text">— {{ dashboard.motivation.author }}</p>
               </div>
               <div class="hero-panel">
                 <div class="metric-card accent">
@@ -391,11 +393,9 @@
               </div>
             </div>
             <section class="panel friends-page">
-              <div class="friend-list">
-                <article class="friend-item"><span class="friend-avatar">AL</span><div><strong>Alya</strong><small>Deep work streak: 6 days</small></div></article>
-                <article class="friend-item"><span class="friend-avatar">KM</span><div><strong>Kamal</strong><small>Preparing for finals</small></div></article>
-                <article class="friend-item"><span class="friend-avatar">SR</span><div><strong>Sara</strong><small>Project sprint this week</small></div></article>
-              </div>
+              <p class="empty-state">
+                No friends yet. {% if current_user %}Add friend connections when that feature is enabled.{% else %}Login to add friends.{% endif %}
+              </p>
             </section>
           </section>
 
@@ -419,12 +419,17 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"></path></svg>
                   </span>
                   <span class="account-copy">
-                    <strong>Student Profile</strong>
-                    <small>Notifications, login, sync</small>
+                    {% if current_user %}
+                      <strong>{{ current_user.email }}</strong>
+                      <small>Supabase account connected</small>
+                    {% else %}
+                      <strong>Student Profile</strong>
+                      <small>Login required for sync</small>
+                    {% endif %}
                   </span>
                 </button>
                 <div class="settings-list">
-                  <div class="settings-item"><span>Email reminders</span><strong>Off</strong></div>
+                  <div class="settings-item"><span>Account status</span><strong>{{ "Connected" if current_user else "Guest" }}</strong></div>
                   <div class="settings-item"><span>Focus alerts</span><strong>On</strong></div>
                   <div class="settings-item"><span>Weekly summary</span><strong>Friday</strong></div>
                 </div>
@@ -463,24 +468,38 @@
       <div class="account-card" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
         <button type="button" id="closeAccount" class="close-account" aria-label="Close login dialog">Close</button>
         <p class="eyebrow">User access</p>
-        <h2 id="accountTitle">Login to your account</h2>
-        <p class="account-text">
-          This is the frontend entry point for authentication. Connect the form to your user backend when you add real accounts.
-        </p>
+        {% if current_user %}
+          <h2 id="accountTitle">Account connected</h2>
+          <p class="account-text">You are logged in as <strong>{{ current_user.email }}</strong>. Your study data is now scoped to this account.</p>
+          <form action="{{ url_for('logout') }}" method="post" class="account-form">
+            <button type="submit">Logout</button>
+          </form>
+        {% else %}
+          <h2 id="accountTitle">Login to your account</h2>
+          <p class="account-text">
+            Use your Supabase email and password. After login, sessions and exams/projects are saved only for your account.
+          </p>
 
-        <form class="account-form">
-          <label>
-            <span>Email</span>
-            <input type="email" name="email" placeholder="student@example.com">
-          </label>
-          <label>
-            <span>Password</span>
-            <input type="password" name="password" placeholder="Enter password">
-          </label>
-          <button type="submit">Login</button>
-        </form>
+          <form action="{{ url_for('login') }}" method="post" class="account-form">
+            <label>
+              <span>Email</span>
+              <input type="email" name="email" placeholder="student@example.com" required>
+            </label>
+            <label>
+              <span>Password</span>
+              <input type="password" name="password" placeholder="Enter password" required>
+            </label>
+            <button type="submit">Login</button>
+          </form>
 
-        <p class="account-note">No account yet? Add signup logic here when you wire backend authentication.</p>
+          <p class="account-note">
+            {% if auth_enabled %}
+              Only users already created in Supabase can log in here.
+            {% else %}
+              Supabase authentication is not configured yet.
+            {% endif %}
+          </p>
+        {% endif %}
       </div>
     </div>
 

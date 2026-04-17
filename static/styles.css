@@ -481,9 +481,18 @@ input::placeholder {
 }
 
 .hero-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100%;
   padding: 2rem;
   position: relative;
   overflow: hidden;
+}
+
+.hero-quote-body {
+  position: relative;
+  z-index: 1;
 }
 
 .hero-copy::before {
@@ -532,10 +541,14 @@ h2 {
 }
 
 .hero-text {
+  margin-bottom: 0;
+  margin-top: auto;
   max-width: 40ch;
   color: var(--muted);
   line-height: 1.6;
   font-size: 1.02rem;
+  position: relative;
+  z-index: 1;
 }
 
 .hero-panel {

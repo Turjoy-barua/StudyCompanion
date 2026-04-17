@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from supabase_client import get_supabase_client
+from supabase_client import create_supabase_client
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -55,6 +55,7 @@ DEFAULT_PLAN_SUBJECTS = [
 
 SessionRecord = dict[str, object]
 AcademicItemRecord = dict[str, object]
+SUPABASE_ENABLED = bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_ANON_KEY"))
 
 
 def get_connection() -> sqlite3.Connection:
@@ -92,9 +93,13 @@ def init_db() -> None:
         )
 
 
-def _get_supabase() -> object | None:
+def _get_supabase(supabase: object | None = None) -> object | None:
+    if supabase is not None:
+        return supabase
+    if not SUPABASE_ENABLED:
+        return None
     try:
-        return get_supabase_client()
+        return create_supabase_client()
     except Exception:
         return None
 
@@ -122,7 +127,12 @@ def _normalize_academic_item_record(record: dict[str, object]) -> AcademicItemRe
     }
 
 
-def add_session(subject: str, duration_minutes: int, session_date: str | None = None) -> None:
+def add_session(
+    subject: str,
+    duration_minutes: int,
+    session_date: str | None = None,
+    supabase: object | None = None,
+) -> None:
     normalized_subject = " ".join(subject.strip().split())
     if not normalized_subject:
         raise ValueError("Subject is required.")
@@ -136,7 +146,7 @@ def add_session(subject: str, duration_minutes: int, session_date: str | None = 
         raise ValueError("Session date must use YYYY-MM-DD format.") from exc
 
     created_at = datetime.now().isoformat(timespec="seconds")
-    supabase = _get_supabase()
+    supabase = _get_supabase(supabase)
     if supabase is not None:
         try:
             supabase.table("study_sessions").insert(
@@ -149,7 +159,11 @@ def add_session(subject: str, duration_minutes: int, session_date: str | None = 
             ).execute()
             return
         except Exception:
-            pass
+            if SUPABASE_ENABLED:
+                raise ValueError("Could not save the session to Supabase.")
+
+    if SUPABASE_ENABLED:
+        raise ValueError("Login is required before saving a session.")
 
     with get_connection() as connection:
         connection.execute(
@@ -161,19 +175,23 @@ def add_session(subject: str, duration_minutes: int, session_date: str | None = 
         )
 
 
-def fetch_sessions(limit: int | None = None) -> list[SessionRecord]:
-    supabase = _get_supabase()
+def fetch_sessions(limit: int | None = None, supabase: object | None = None) -> list[SessionRecord]:
+    supabase = _get_supabase(supabase)
     if supabase is not None:
         try:
             query = supabase.table("study_sessions").select(
-                "id, subject, duration_minutes, session_date, created_at"
+                "id, subject, duration_minutes, session_date, created_at, user_id"
             ).order("session_date", desc=True).order("created_at", desc=True).order("id", desc=True)
             if limit is not None:
                 query = query.limit(limit)
             response = query.execute()
             return [_normalize_session_record(record) for record in response.data or []]
         except Exception:
-            pass
+            if SUPABASE_ENABLED:
+                return []
+
+    if SUPABASE_ENABLED:
+        return []
 
     query = """
         SELECT id, subject, duration_minutes, session_date, created_at
@@ -197,6 +215,7 @@ def add_academic_item(
     importance: str,
     confidence_percent: int,
     due_date: str,
+    supabase: object | None = None,
 ) -> None:
     normalized_title = " ".join(title.strip().split())
     normalized_kind = item_kind.strip().lower()
@@ -223,7 +242,7 @@ def add_academic_item(
         raise ValueError("Exam type is required for exams.")
 
     created_at = datetime.now().isoformat(timespec="seconds")
-    supabase = _get_supabase()
+    supabase = _get_supabase(supabase)
     if supabase is not None:
         try:
             supabase.table("academic_items").insert(
@@ -239,7 +258,11 @@ def add_academic_item(
             ).execute()
             return
         except Exception:
-            pass
+            if SUPABASE_ENABLED:
+                raise ValueError("Could not save the upcoming item to Supabase.")
+
+    if SUPABASE_ENABLED:
+        raise ValueError("Login is required before saving an upcoming item.")
 
     with get_connection() as connection:
         connection.execute(
@@ -267,19 +290,23 @@ def add_academic_item(
         )
 
 
-def fetch_academic_items(limit: int | None = None) -> list[AcademicItemRecord]:
-    supabase = _get_supabase()
+def fetch_academic_items(limit: int | None = None, supabase: object | None = None) -> list[AcademicItemRecord]:
+    supabase = _get_supabase(supabase)
     if supabase is not None:
         try:
             query = supabase.table("academic_items").select(
-                "id, title, item_kind, exam_type, importance, confidence_percent, due_date, created_at"
+                "id, title, item_kind, exam_type, importance, confidence_percent, due_date, created_at, user_id"
             ).order("due_date", desc=False).order("created_at", desc=False).order("id", desc=False)
             if limit is not None:
                 query = query.limit(limit)
             response = query.execute()
             return [_normalize_academic_item_record(record) for record in response.data or []]
         except Exception:
-            pass
+            if SUPABASE_ENABLED:
+                return []
+
+    if SUPABASE_ENABLED:
+        return []
 
     query = """
         SELECT id, title, item_kind, exam_type, importance, confidence_percent, due_date, created_at
@@ -380,7 +407,7 @@ def get_daily_motivation() -> dict[str, str]:
     quote = _pick_random_item(quotes)
     return {
         "text": quote["text"],
-        "author": quote["author"] or "Study Companion",
+        "author": quote["author"] or "zenithstudy",
         "source": "csv" if quotes is not FALLBACK_QUOTES else "fallback",
     }
 
@@ -590,9 +617,9 @@ def _build_daily_forced_plan(sessions: list[SessionRecord], academic_items: list
     }
 
 
-def get_dashboard_data() -> dict:
-    sessions = fetch_sessions()
-    academic_items = fetch_academic_items(limit=8)
+def get_dashboard_data(supabase: object | None = None) -> dict:
+    sessions = fetch_sessions(supabase=supabase)
+    academic_items = fetch_academic_items(limit=8, supabase=supabase)
     today = date.today()
     today_iso = today.isoformat()
     current_month = today.month

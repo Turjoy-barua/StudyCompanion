@@ -50,6 +50,7 @@ FALLBACK_QUOTES = [
 SessionRecord = dict[str, object]
 AcademicItemRecord = dict[str, object]
 SUPABASE_ENABLED = bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_ANON_KEY"))
+MAX_QUOTE_WORDS = 20
 
 
 def get_connection() -> sqlite3.Connection:
@@ -361,6 +362,10 @@ def _pick_random_item(items: list[dict[str, str]]) -> dict[str, str]:
     return random.choice(items)
 
 
+def _is_short_quote(text: str) -> bool:
+    return len(text.split()) <= MAX_QUOTE_WORDS
+
+
 def _extract_quote_records(dataframe) -> list[dict[str, str]]:
     quote_columns = ("quote", "text", "quotation", "quotes")
     author_columns = ("author", "name", "speaker", "person")
@@ -376,6 +381,8 @@ def _extract_quote_records(dataframe) -> list[dict[str, str]]:
     for _, row in dataframe.iterrows():
         quote_text = " ".join(str(row[quote_column]).split()).strip()
         if not quote_text or quote_text.lower() == "nan":
+            continue
+        if not _is_short_quote(quote_text):
             continue
 
         author_text = ""
@@ -401,6 +408,8 @@ def _load_csv_quotes() -> list[dict[str, str]]:
                 category = " ".join(str(row.get("Category", "")).split()).strip()
                 if not quote_text:
                     continue
+                if not _is_short_quote(quote_text):
+                    continue
                 records.append(
                     {
                         "text": quote_text,
@@ -413,12 +422,13 @@ def _load_csv_quotes() -> list[dict[str, str]]:
 
 
 def get_daily_motivation() -> dict[str, str]:
-    quotes = _load_csv_quotes() or FALLBACK_QUOTES
+    fallback_quotes = [quote for quote in FALLBACK_QUOTES if _is_short_quote(quote["text"])]
+    quotes = _load_csv_quotes() or fallback_quotes
     quote = _pick_random_item(quotes)
     return {
         "text": quote["text"],
         "author": quote["author"] or "zenithstudy",
-        "source": "csv" if quotes is not FALLBACK_QUOTES else "fallback",
+        "source": "csv" if quotes is not fallback_quotes else "fallback",
     }
 
 

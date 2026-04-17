@@ -103,6 +103,23 @@
     }
   }
 
+  function initializeFlashMessages() {
+    const flashStack = document.querySelector(".flash-stack");
+    if (!flashStack) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      flashStack.classList.add("is-dismissing");
+      for (const flash of flashStack.querySelectorAll(".flash")) {
+        flash.classList.add("is-dismissing");
+      }
+      window.setTimeout(() => {
+        flashStack.remove();
+      }, 220);
+    }, 3000);
+  }
+
   function applyAppTheme(themeId) {
     const matchedTheme = appThemes.find((theme) => theme.id === themeId) || appThemes[0];
     document.body.dataset.appTheme = matchedTheme.id;
@@ -400,6 +417,7 @@
   });
 
   initializeNavigation();
+  initializeFlashMessages();
   initializeConfidenceSliders();
   renderAppThemes();
   renderFocusThemes();

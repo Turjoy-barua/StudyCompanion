@@ -33,7 +33,8 @@
   const appThemes = [
     { id: "ivory", label: "Ivory", description: "Soft white study board" },
     { id: "rose", label: "Rose", description: "Warm pastel workspace" },
-    { id: "slate", label: "Slate", description: "Cool clean planner" },
+    { id: "slate", label: "Graphite", description: "Charcoal planner surface" },
+    { id: "dark", label: "Obsidian", description: "Low-light deep focus mode" },
   ];
   const focusThemes = [
     { id: "midnight-orbit", label: "Midnight Orbit" },
@@ -46,6 +47,7 @@
     { id: "mono-zen", label: "Mono Zen" },
     { id: "golden-hour", label: "Golden Hour" },
     { id: "cosmic-wave", label: "Cosmic Wave" },
+    { id: "noir-eclipse", label: "Noir Eclipse" },
   ];
   const defaultFocusTheme = focusThemes[0].id;
   const defaultAppTheme = appThemes[0].id;

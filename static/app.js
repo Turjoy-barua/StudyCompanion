@@ -20,10 +20,18 @@
   const accountToggle = document.getElementById("accountToggle");
   const accountModal = document.getElementById("accountModal");
   const closeAccount = document.getElementById("closeAccount");
+  const accountTitle = document.getElementById("accountTitle");
+  const loginForm = document.getElementById("loginForm");
+  const showSignup = document.getElementById("showSignup");
+  const signupForm = document.getElementById("signupForm");
+  const showLogin = document.getElementById("showLogin");
+  const loginDisclosure = document.getElementById("loginDisclosure");
   const weeklyChart = document.getElementById("weeklyChart");
   const appThemeOptions = document.getElementById("appThemeOptions");
   const navItems = Array.from(document.querySelectorAll(".sidebar-nav-item"));
   const appViews = Array.from(document.querySelectorAll(".app-view"));
+  const plannerSwitchCards = Array.from(document.querySelectorAll(".planner-switch-card"));
+  const plannerSections = Array.from(document.querySelectorAll("[data-planner-section]"));
   const accountOpenButtons = Array.from(document.querySelectorAll("[data-open-account='true']"));
   const confidenceSliders = Array.from(document.querySelectorAll("[data-confidence-slider]"));
   const today = document.querySelector(".timer-shell")?.dataset.today;
@@ -103,6 +111,40 @@
       slider.addEventListener("input", renderValue);
       renderValue();
     }
+  }
+
+  function applyPlannerSection(sectionId) {
+    if (!plannerSwitchCards.length || !plannerSections.length) {
+      return;
+    }
+
+    const targetSection = plannerSections.find((section) => section.dataset.plannerSection === sectionId) || plannerSections[0];
+    const activeId = targetSection.dataset.plannerSection;
+
+    for (const section of plannerSections) {
+      section.hidden = section !== targetSection;
+    }
+
+    for (const card of plannerSwitchCards) {
+      const isActive = card.dataset.plannerSectionTarget === activeId;
+      card.classList.toggle("is-active", isActive);
+      card.setAttribute("aria-pressed", String(isActive));
+    }
+
+    window.localStorage.setItem("study-companion-planner-section", activeId);
+  }
+
+  function initializePlannerSwitcher() {
+    if (!plannerSwitchCards.length || !plannerSections.length) {
+      return;
+    }
+
+    for (const card of plannerSwitchCards) {
+      card.addEventListener("click", () => applyPlannerSection(card.dataset.plannerSectionTarget || "subjects"));
+    }
+
+    const savedSection = window.localStorage.getItem("study-companion-planner-section");
+    applyPlannerSection(savedSection || "subjects");
   }
 
   function initializeFlashMessages() {
@@ -367,6 +409,27 @@
     accountModal.hidden = !show;
   }
 
+  function showAccountMode(mode) {
+    const isSignup = mode === "signup";
+    if (accountTitle) {
+      accountTitle.textContent = isSignup ? "Create a new account" : "Login to your account";
+    }
+    if (loginForm) {
+      loginForm.hidden = isSignup;
+    }
+    if (signupForm) {
+      signupForm.hidden = !isSignup;
+    }
+    if (showSignup) {
+      showSignup.closest(".signup-disclosure").hidden = isSignup;
+    }
+    if (loginDisclosure) {
+      loginDisclosure.hidden = !isSignup;
+    }
+    const targetForm = isSignup ? signupForm : loginForm;
+    targetForm?.querySelector("input")?.focus();
+  }
+
   function renderWeeklyChart() {
     if (!weeklyChart) {
       return;
@@ -407,6 +470,8 @@
     button.addEventListener("click", () => toggleAccount(true));
   }
   closeAccount?.addEventListener("click", () => toggleAccount(false));
+  showSignup?.addEventListener("click", () => showAccountMode("signup"));
+  showLogin?.addEventListener("click", () => showAccountMode("login"));
   focusOverlay?.addEventListener("click", (event) => {
     if (event.target === focusOverlay) {
       toggleFocus(false);
@@ -421,6 +486,7 @@
   initializeNavigation();
   initializeFlashMessages();
   initializeConfidenceSliders();
+  initializePlannerSwitcher();
   renderAppThemes();
   renderFocusThemes();
   renderWeeklyChart();

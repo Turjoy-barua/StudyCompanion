@@ -79,7 +79,6 @@
                   <p class="eyebrow">Quote of the day</p>
                   <h1>“{{ dashboard.motivation.text }}”</h1>
                 </div>
-                <p class="hero-text">— {{ dashboard.motivation.author }}</p>
               </div>
               <div class="hero-panel">
                 <div class="metric-card accent">
@@ -163,6 +162,37 @@
             </section>
 
             <main class="content-grid">
+              <section class="panel priority-panel">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">Subjects</p>
+                    <h2>Study priorities</h2>
+                  </div>
+                </div>
+                <div class="priority-list">
+                  {% if dashboard.subject_priorities %}
+                    {% for subject in dashboard.subject_priorities[:4] %}
+                      <article class="priority-item">
+                        <div class="priority-item-top">
+                          <div>
+                            <p class="planner-item-kind">{{ subject.priority }}</p>
+                            <h3>{{ subject.name }}</h3>
+                          </div>
+                          <strong>{{ subject.score }}</strong>
+                        </div>
+                        <div class="priority-meta">
+                          <span>{{ subject.studied_this_week }} / {{ subject.weekly_goal_minutes }} min this week</span>
+                          <span>{{ subject.confidence_percent }}% confidence</span>
+                        </div>
+                        <div class="confidence-bar"><span style="width: {{ subject.confidence_percent }}%"></span></div>
+                      </article>
+                    {% endfor %}
+                  {% else %}
+                    <p class="empty-state">Add your subjects in Planner so the app can rank what needs attention most.</p>
+                  {% endif %}
+                </div>
+              </section>
+
               <section class="panel analytics-panel">
                 <div class="section-heading">
                   <div>
@@ -336,10 +366,83 @@
             <div class="view-header">
               <div>
                 <p class="eyebrow">Planner</p>
-                <h2>Exams and projects</h2>
+                <h2>Subjects, exams and projects</h2>
               </div>
             </div>
-            <section class="panel planner-panel">
+            <div class="planner-switcher" aria-label="Planner sections">
+              <button type="button" class="planner-switch-card is-active" data-planner-section-target="subjects" aria-pressed="true">
+                <span class="planner-switch-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7a4 4 0 0 1 4 4v12H8a4 4 0 0 0-4-4Zm16 0h-3a4 4 0 0 0-4 4v12h3a4 4 0 0 1 4-4Z"></path></svg>
+                </span>
+                <span>
+                  <strong>Subjects</strong>
+                  <small>What you study</small>
+                </span>
+              </button>
+              <button type="button" class="planner-switch-card" data-planner-section-target="academic" aria-pressed="false">
+                <span class="planner-switch-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h2v2h6V2h2v2h3v18H4V4h3Zm11 7H6v11h12Z"></path></svg>
+                </span>
+                <span>
+                  <strong>Exams & projects</strong>
+                  <small>Deadlines and syllabus</small>
+                </span>
+              </button>
+            </div>
+            <section class="panel subjects-manager-panel" data-planner-section="subjects">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Subjects</p>
+                  <h2>Subjects to study</h2>
+                </div>
+              </div>
+              <div class="planner-layout subjects-manager-layout">
+                <form action="{{ url_for('create_study_subject') }}" method="post" class="planner-form subject-form">
+                  <label><span>Subject</span><input type="text" name="name" placeholder="Physics" required></label>
+                  <label><span>Priority</span><select name="priority" required><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+                  <label class="confidence-input-group">
+                    <span>Confidence (%)</span>
+                    <div class="confidence-slider-row">
+                      <input type="range" name="confidence_percent" min="0" max="100" step="1" value="50" data-confidence-slider>
+                      <strong class="confidence-slider-value" data-confidence-value>50%</strong>
+                    </div>
+                  </label>
+                  <label><span>Weekly goal (minutes)</span><input type="number" name="weekly_goal_minutes" min="0" step="5" placeholder="180" required></label>
+                  <label class="planner-chapters-field"><span>Notes</span><textarea name="notes" rows="3" placeholder="Weak chapters, exam board, or focus areas"></textarea></label>
+                  <button type="submit">Save subject</button>
+                </form>
+                <div class="planner-list subject-list-manager">
+                  {% if dashboard.subject_priorities %}
+                    {% for subject in dashboard.subject_priorities %}
+                      <article class="planner-item subject-profile-item">
+                        <div class="planner-item-top">
+                          <div>
+                            <p class="planner-item-kind">{{ subject.priority }}</p>
+                            <h3>{{ subject.name }}</h3>
+                          </div>
+                          <span class="planner-importance planner-importance-{{ subject.priority.lower() }}">{{ subject.goal_gap }} min gap</span>
+                        </div>
+                        <p class="planner-meta">{{ subject.studied_this_week }} of {{ subject.weekly_goal_minutes }} weekly minutes studied</p>
+                        {% if subject.notes %}
+                          <p class="planner-chapters">{{ subject.notes }}</p>
+                        {% endif %}
+                        <div class="confidence-bar"><span style="width: {{ subject.confidence_percent }}%"></span></div>
+                        <p class="planner-confidence">Confidence: {{ subject.confidence_percent }}%</p>
+                      </article>
+                    {% endfor %}
+                  {% else %}
+                    <p class="empty-state">Add every subject you need to study. The app will rank the weakest and highest-priority ones first.</p>
+                  {% endif %}
+                </div>
+              </div>
+            </section>
+            <section class="panel planner-panel" data-planner-section="academic" hidden>
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Deadlines</p>
+                  <h2>Exams and projects</h2>
+                </div>
+              </div>
               <div class="planner-layout">
                 <form action="{{ url_for('create_academic_item') }}" method="post" class="planner-form">
                   <label><span>Title</span><input type="text" name="title" placeholder="Linear Algebra midterm" required></label>
@@ -491,10 +594,10 @@
         {% else %}
           <h2 id="accountTitle">Login to your account</h2>
           <p class="account-text">
-            Use your Supabase email and password. After login, sessions and exams/projects are saved only for your account.
+            Use Supabase email authentication. After login, sessions and exams/projects are saved only for your account.
           </p>
 
-          <form action="{{ url_for('login') }}" method="post" class="account-form">
+          <form action="{{ url_for('login') }}" method="post" class="account-form" id="loginForm">
             <label>
               <span>Email</span>
               <input type="email" name="email" placeholder="student@example.com" required>
@@ -506,9 +609,35 @@
             <button type="submit">Login</button>
           </form>
 
+          <div class="signup-disclosure">
+            <p>Don't have an account?</p>
+            <button type="button" id="showSignup" class="text-button">Create a new account</button>
+          </div>
+
+          <form action="{{ url_for('signup') }}" method="post" class="account-form signup-form" id="signupForm" hidden>
+            <label>
+              <span>Email</span>
+              <input type="email" name="email" placeholder="student@example.com" required>
+            </label>
+            <label>
+              <span>Password</span>
+              <input type="password" name="password" placeholder="At least 6 characters" minlength="6" required>
+            </label>
+            <label>
+              <span>Confirm password</span>
+              <input type="password" name="confirm_password" placeholder="Repeat password" minlength="6" required>
+            </label>
+            <button type="submit">Create account</button>
+          </form>
+
+          <div class="login-disclosure" id="loginDisclosure" hidden>
+            <p>Already have an account?</p>
+            <button type="button" id="showLogin" class="text-button">Login</button>
+          </div>
+
           <p class="account-note">
             {% if auth_enabled %}
-              Only users already created in Supabase can log in here. If you only added the email, that user still needs a password in Supabase Auth.
+              New accounts may need email confirmation before login, depending on your Supabase Auth settings.
             {% else %}
               Supabase authentication is not configured yet.
             {% endif %}

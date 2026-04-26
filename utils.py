@@ -49,6 +49,7 @@ FALLBACK_QUOTES = [
 
 SessionRecord = dict[str, object]
 AcademicItemRecord = dict[str, object]
+StudySubjectRecord = dict[str, object]
 SUPABASE_ENABLED = bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_ANON_KEY"))
 MAX_QUOTE_WORDS = 20
 
@@ -91,6 +92,19 @@ def init_db() -> None:
             connection.execute("ALTER TABLE academic_items ADD COLUMN chapters TEXT")
         except sqlite3.OperationalError:
             pass
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS study_subjects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                priority TEXT NOT NULL,
+                confidence_percent INTEGER NOT NULL CHECK(confidence_percent >= 0 AND confidence_percent <= 100),
+                weekly_goal_minutes INTEGER NOT NULL CHECK(weekly_goal_minutes >= 0),
+                notes TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
         
 
 
@@ -103,6 +117,11 @@ def _get_supabase(supabase: object | None = None) -> object | None:
         return create_supabase_client()
     except Exception:
         return None
+
+
+def _is_missing_supabase_column(exc: Exception, column_name: str) -> bool:
+    error_text = str(exc)
+    return "42703" in error_text and column_name in error_text
 
 
 def _normalize_session_record(record: dict[str, object]) -> SessionRecord:
@@ -125,6 +144,18 @@ def _normalize_academic_item_record(record: dict[str, object]) -> AcademicItemRe
         "importance": record.get("importance", ""),
         "confidence_percent": int(record.get("confidence_percent", 0) or 0),
         "due_date": str(record.get("due_date", "")),
+        "created_at": str(record.get("created_at", "")),
+    }
+
+
+def _normalize_study_subject_record(record: dict[str, object]) -> StudySubjectRecord:
+    return {
+        "id": record.get("id"),
+        "name": record.get("name", ""),
+        "priority": record.get("priority", ""),
+        "confidence_percent": int(record.get("confidence_percent", 0) or 0),
+        "weekly_goal_minutes": int(record.get("weekly_goal_minutes", 0) or 0),
+        "notes": record.get("notes") or "",
         "created_at": str(record.get("created_at", "")),
     }
 
@@ -252,19 +283,24 @@ def add_academic_item(
     supabase = _get_supabase(supabase)
     if supabase is not None:
         try:
-            supabase.table("academic_items").insert(
-                {
-                    "user_id": user_id,
-                    "title": normalized_title,
-                    "item_kind": normalized_kind,
-                    "exam_type": normalized_exam_type,
-                    "chapters": normalized_chapters,
-                    "importance": normalized_importance,
-                    "confidence_percent": confidence_percent,
-                    "due_date": due_date,
-                    "created_at": created_at,
-                }
-            ).execute()
+            payload = {
+                "user_id": user_id,
+                "title": normalized_title,
+                "item_kind": normalized_kind,
+                "exam_type": normalized_exam_type,
+                "chapters": normalized_chapters,
+                "importance": normalized_importance,
+                "confidence_percent": confidence_percent,
+                "due_date": due_date,
+                "created_at": created_at,
+            }
+            try:
+                supabase.table("academic_items").insert(payload).execute()
+            except Exception as exc:
+                if not _is_missing_supabase_column(exc, "chapters"):
+                    raise
+                payload.pop("chapters", None)
+                supabase.table("academic_items").insert(payload).execute()
             return
         except Exception as exc:
             if SUPABASE_ENABLED:
@@ -305,12 +341,22 @@ def fetch_academic_items(limit: int | None = None, supabase: object | None = Non
     supabase = _get_supabase(supabase)
     if supabase is not None:
         try:
-            query = supabase.table("academic_items").select(
-                "id, title, item_kind, exam_type, chapters, importance, confidence_percent, due_date, created_at, user_id"
-            ).order("due_date", desc=False).order("created_at", desc=False).order("id", desc=False)
+            columns = "id, title, item_kind, exam_type, chapters, importance, confidence_percent, due_date, created_at, user_id"
+            query = supabase.table("academic_items").select(columns)
+            query = query.order("due_date", desc=False).order("created_at", desc=False).order("id", desc=False)
             if limit is not None:
                 query = query.limit(limit)
-            response = query.execute()
+            try:
+                response = query.execute()
+            except Exception as exc:
+                if not _is_missing_supabase_column(exc, "chapters"):
+                    raise
+                fallback_columns = "id, title, item_kind, exam_type, importance, confidence_percent, due_date, created_at, user_id"
+                query = supabase.table("academic_items").select(fallback_columns)
+                query = query.order("due_date", desc=False).order("created_at", desc=False).order("id", desc=False)
+                if limit is not None:
+                    query = query.limit(limit)
+                response = query.execute()
             return [_normalize_academic_item_record(record) for record in response.data or []]
         except Exception:
             if SUPABASE_ENABLED:
@@ -332,6 +378,116 @@ def fetch_academic_items(limit: int | None = None, supabase: object | None = Non
     with get_connection() as connection:
         rows = connection.execute(query, params).fetchall()
     return [_normalize_academic_item_record(dict(row)) for row in rows]
+
+
+def add_study_subject(
+    name: str,
+    priority: str,
+    confidence_percent: int,
+    weekly_goal_minutes: int,
+    notes: str = "",
+    supabase: object | None = None,
+    user_id: str | None = None,
+) -> None:
+    normalized_name = " ".join(name.strip().split())
+    normalized_priority = priority.strip().lower()
+    normalized_notes = " ".join(notes.strip().split())
+
+    if not normalized_name:
+        raise ValueError("Subject name is required.")
+    if normalized_priority not in {"critical", "high", "medium", "low"}:
+        raise ValueError("Priority must be critical, high, medium, or low.")
+    if not 0 <= confidence_percent <= 100:
+        raise ValueError("Confidence must be between 0 and 100.")
+    if weekly_goal_minutes < 0:
+        raise ValueError("Weekly goal cannot be negative.")
+
+    created_at = datetime.now().isoformat(timespec="seconds")
+    supabase = _get_supabase(supabase)
+    if supabase is not None:
+        try:
+            supabase.table("study_subjects").insert(
+                {
+                    "user_id": user_id,
+                    "name": normalized_name,
+                    "priority": normalized_priority,
+                    "confidence_percent": confidence_percent,
+                    "weekly_goal_minutes": weekly_goal_minutes,
+                    "notes": normalized_notes,
+                    "created_at": created_at,
+                }
+            ).execute()
+            return
+        except Exception as exc:
+            if SUPABASE_ENABLED:
+                raise ValueError(
+                    "Could not save the subject to Supabase. Make sure the study_subjects table exists. "
+                    f"{exc}"
+                )
+
+    if SUPABASE_ENABLED:
+        raise ValueError("Login is required before saving a subject.")
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO study_subjects (
+                name,
+                priority,
+                confidence_percent,
+                weekly_goal_minutes,
+                notes,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(name) DO UPDATE SET
+                priority = excluded.priority,
+                confidence_percent = excluded.confidence_percent,
+                weekly_goal_minutes = excluded.weekly_goal_minutes,
+                notes = excluded.notes
+            """,
+            (
+                normalized_name,
+                normalized_priority,
+                confidence_percent,
+                weekly_goal_minutes,
+                normalized_notes,
+                created_at,
+            ),
+        )
+
+
+def fetch_study_subjects(limit: int | None = None, supabase: object | None = None) -> list[StudySubjectRecord]:
+    supabase = _get_supabase(supabase)
+    if supabase is not None:
+        try:
+            query = supabase.table("study_subjects").select(
+                "id, name, priority, confidence_percent, weekly_goal_minutes, notes, created_at, user_id"
+            ).order("created_at", desc=False).order("id", desc=False)
+            if limit is not None:
+                query = query.limit(limit)
+            response = query.execute()
+            return [_normalize_study_subject_record(record) for record in response.data or []]
+        except Exception:
+            if SUPABASE_ENABLED:
+                return []
+
+    if SUPABASE_ENABLED:
+        return []
+
+    query = """
+        SELECT id, name, priority, confidence_percent, weekly_goal_minutes, notes, created_at
+        FROM study_subjects
+        ORDER BY created_at ASC, id ASC
+    """
+    params: tuple[int, ...] = ()
+    if limit is not None:
+        query += " LIMIT ?"
+        params = (limit,)
+
+    with get_connection() as connection:
+        rows = connection.execute(query, params).fetchall()
+    return [_normalize_study_subject_record(dict(row)) for row in rows]
 
 
 def _calculate_streak(session_dates: set[date]) -> int:
@@ -629,18 +785,59 @@ def _build_daily_forced_plan(sessions: list[SessionRecord], academic_items: list
     }
 
 
+def _build_subject_priorities(
+    study_subjects: list[StudySubjectRecord],
+    subject_totals: dict[str, int],
+    weekly_subject_totals: dict[str, int],
+) -> list[dict]:
+    ranked_subjects = []
+    priority_weight = {"critical": 45, "high": 30, "medium": 18, "low": 8}
+
+    for subject in study_subjects:
+        name = str(subject["name"])
+        confidence_percent = int(subject["confidence_percent"])
+        weekly_goal_minutes = int(subject["weekly_goal_minutes"])
+        studied_this_week = weekly_subject_totals.get(name, 0)
+        goal_gap = max(weekly_goal_minutes - studied_this_week, 0)
+        score = (
+            priority_weight.get(subject["priority"], 0)
+            + (100 - confidence_percent)
+            + min(goal_gap // 10, 35)
+        )
+        ranked_subjects.append(
+            {
+                "id": subject["id"],
+                "name": name,
+                "priority": str(subject["priority"]).title(),
+                "confidence_percent": confidence_percent,
+                "weekly_goal_minutes": weekly_goal_minutes,
+                "studied_this_week": studied_this_week,
+                "total_minutes": subject_totals.get(name, 0),
+                "goal_gap": goal_gap,
+                "notes": subject["notes"],
+                "score": score,
+            }
+        )
+
+    ranked_subjects.sort(key=lambda item: item["score"], reverse=True)
+    return ranked_subjects
+
+
 def get_dashboard_data(supabase: object | None = None) -> dict:
     sessions = fetch_sessions(supabase=supabase)
     academic_items = fetch_academic_items(limit=8, supabase=supabase)
+    study_subjects = fetch_study_subjects(supabase=supabase)
     today = date.today()
     today_iso = today.isoformat()
     current_month = today.month
     current_year = today.year
+    week_start = today - timedelta(days=today.weekday())
 
     total_minutes = 0
     today_minutes = 0
     today_sessions = 0
     subject_totals: dict[str, int] = defaultdict(int)
+    weekly_subject_totals: dict[str, int] = defaultdict(int)
     session_dates: set[date] = set()
     activity_map: dict[str, int] = {}
 
@@ -655,6 +852,8 @@ def get_dashboard_data(supabase: object | None = None) -> dict:
         if session_day.year == current_year and session_day.month == current_month:
             total_minutes += duration
         subject_totals[session["subject"]] += duration
+        if session_day >= week_start:
+            weekly_subject_totals[session["subject"]] += duration
         session_dates.add(session_day)
 
         if session["session_date"] == today_iso:
@@ -692,6 +891,7 @@ def get_dashboard_data(supabase: object | None = None) -> dict:
     motivation = get_daily_motivation()
     forced_plan = _build_daily_forced_plan(sessions, academic_items)
     next_best_action = _build_next_best_action(academic_items, subject_totals)
+    subject_priorities = _build_subject_priorities(study_subjects, subject_totals, weekly_subject_totals)
     upcoming_items = []
     for item in academic_items:
         due_date = datetime.strptime(item["due_date"], "%Y-%m-%d").date()
@@ -724,5 +924,7 @@ def get_dashboard_data(supabase: object | None = None) -> dict:
         "motivation": motivation,
         "forced_plan": forced_plan,
         "next_best_action": next_best_action,
+        "study_subjects": study_subjects,
+        "subject_priorities": subject_priorities,
         "upcoming_items": upcoming_items,
     }

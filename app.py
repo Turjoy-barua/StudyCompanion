@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 
 from supabase_client import create_authenticated_supabase_client, create_supabase_client
-from utils import SUPABASE_ENABLED, add_academic_item, add_session, get_dashboard_data, init_db
+from utils import SUPABASE_ENABLED, add_academic_item, add_session, add_study_subject, get_dashboard_data, init_db
 
 
 load_dotenv()
@@ -81,9 +81,6 @@ def _login_required(handler):
             if _get_authenticated_supabase() is None:
                 flash("Login is required for that action.", "error")
                 return redirect(url_for("index"))
-        elif not _get_current_user():
-            flash("Login is required for that action.", "error")
-            return redirect(url_for("index"))
         return handler(*args, **kwargs)
 
     return wrapped
@@ -109,6 +106,17 @@ def _parse_confidence(raw_value: str) -> int:
     if not 0 <= confidence <= 100:
         raise ValueError("Confidence must be between 0 and 100.")
     return confidence
+
+
+def _parse_nonnegative_minutes(raw_value: str) -> int:
+    try:
+        minutes = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Weekly goal must be a whole number of minutes.") from exc
+
+    if minutes < 0:
+        raise ValueError("Weekly goal cannot be negative.")
+    return minutes
 
 
 @app.get("/")
@@ -161,6 +169,47 @@ def login():
     session["current_user_id"] = response.user.id
     session["current_user_email"] = response.user.email or email
     flash("Logged in successfully.", "success")
+    return redirect(url_for("index"))
+
+
+@app.post("/auth/signup")
+def signup():
+    if not SUPABASE_ENABLED:
+        flash("Supabase authentication is not configured.", "error")
+        return redirect(url_for("index"))
+
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+    confirm_password = request.form.get("confirm_password", "")
+
+    if not email or not password:
+        flash("Email and password are required.", "error")
+        return redirect(url_for("index"))
+    if len(password) < 6:
+        flash("Password must be at least 6 characters.", "error")
+        return redirect(url_for("index"))
+    if password != confirm_password:
+        flash("Passwords do not match.", "error")
+        return redirect(url_for("index"))
+
+    _clear_auth_session()
+
+    try:
+        client = create_supabase_client()
+        response = client.auth.sign_up({"email": email, "password": password})
+    except Exception as exc:
+        flash(str(exc).strip() or "Signup failed.", "error")
+        return redirect(url_for("index"))
+
+    if response.session is not None and response.user is not None:
+        session["supabase_access_token"] = response.session.access_token
+        session["supabase_refresh_token"] = response.session.refresh_token
+        session["current_user_id"] = response.user.id
+        session["current_user_email"] = response.user.email or email
+        flash("Account created and logged in.", "success")
+    else:
+        flash("Account created. Check your email to confirm it, then log in.", "success")
+
     return redirect(url_for("index"))
 
 
@@ -223,9 +272,30 @@ def create_academic_item():
     return redirect(url_for("index"))
 
 
+@app.post("/subjects")
+@_login_required
+def create_study_subject():
+    try:
+        add_study_subject(
+            request.form.get("name", ""),
+            request.form.get("priority", ""),
+            _parse_confidence(request.form.get("confidence_percent", "")),
+            _parse_nonnegative_minutes(request.form.get("weekly_goal_minutes", "0")),
+            request.form.get("notes", ""),
+            supabase=_get_authenticated_supabase(),
+            user_id=_require_user_id(),
+        )
+    except ValueError as exc:
+        flash(str(exc), "error")
+    else:
+        flash("Subject saved.", "success")
+
+    return redirect(url_for("index"))
+
+
 @app.post("/api/sessions")
 def create_session_api():
-    if not _get_current_user():
+    if SUPABASE_ENABLED and not _get_current_user():
         return jsonify({"ok": False, "error": "Login is required before saving a session."}), 401
 
     payload = request.get_json(silent=True) or {}

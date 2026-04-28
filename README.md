@@ -1,171 +1,119 @@
-# 📚 Study Companion – Smart Study Tracker
+# Study Companion
 
-A simple yet powerful **study tracker app** built with Python and Streamlit to help students stay focused, track progress, and build consistent study habits.
+A Flask-based study tracker that helps students plan subjects, log study sessions, track progress, and stay consistent.
 
----
+## Overview
 
-## 🚀 Overview
+Study Companion is designed to be used while studying and for reviewing progress afterward. It combines a study timer, session logging, a dashboard, streak tracking, XP-based motivation, and academic planning in one local web app.
 
-**Study Companion** is designed to be used *while you study*, not just after.
+## Features
 
-It combines:
+- Study timer for focused sessions
+- Session logging by subject, duration, and date
+- Dashboard with daily totals, session counts, subject breakdowns, XP, level, and streaks
+- Subject planning with priority, confidence, weekly goals, and notes
+- Academic item tracking for assignments, exams, projects, quizzes, and reading
+- SQLite storage for local use
+- Optional Supabase authentication and remote data storage
 
-* ⏱️ A study timer
-* 📊 Progress tracking
-* 🔥 Streak & motivation system
+## Tech Stack
 
-The goal is to turn studying into something **interactive, rewarding, and consistent**.
+- Python
+- Flask
+- SQLite
+- Supabase, optional
+- HTML, CSS, and JavaScript
 
----
+## Project Structure
 
-## ✨ Features
-
-### ⏱️ Study Timer
-
-* Start / Pause / Stop sessions
-* Track how long you study in real time
-* Optional Pomodoro mode (25 min focus / 5 min break)
-
----
-
-### 📝 Session Logging
-
-* Save each study session with:
-
-  * Subject
-  * Duration
-  * Date
-* All sessions are stored for future analysis
-
----
-
-### 📊 Dashboard
-
-* Total study time (daily)
-* Number of sessions completed
-* Subject-wise breakdown
-* Visual progress (graphs)
-
----
-
-### 🔥 Streak System
-
-* Tracks how many days in a row you studied
-* Encourages consistency
-* Lose streak if you skip a day 😈
-
----
-
-### 🎮 Gamification (XP System)
-
-* Earn XP for every study session
-* Level up as you stay consistent
-* Unlock titles like:
-
-  * Beginner
-  * Focused Learner
-  * Study Beast
-
----
-
-### 🎯 Focus Mode
-
-* Clean, distraction-free interface
-* Minimal design to help you concentrate
-* Timer-centered experience
-
----
-
-## 🧠 Tech Stack
-
-* **Python**
-* **Streamlit** (UI framework)
-* **SQLite / JSON** (data storage)
-* **Matplotlib / Streamlit Charts** (visualization)
-
----
-
-## 📂 Project Structure
-
-```
-study-companion/
-│
-├── app.py              # Main flask app
-├── database.db        # SQLite database (or data.json)
-├── utils.py           # Helper functions (XP, streak, etc.)
-├── requirements.txt   # Dependencies
-└── README.md          # Project documentation
+```text
+StudyCompanion/
+├── app.py                 # Flask routes and request handling
+├── utils.py               # Database helpers, dashboard data, XP, and streak logic
+├── supabase_client.py     # Optional Supabase client setup
+├── database.db            # Local SQLite database
+├── requirements.txt       # Python dependencies
+├── supabase_schema.sql    # Supabase table schema
+├── templates/
+│   └── index.html         # Main page template
+└── static/
+    ├── app.js             # Frontend interactions and timer behavior
+    ├── styles.css         # App styling
+    └── study-companion-logo.svg
 ```
 
----
-
-## ⚙️ Installation
+## Setup
 
 1. Clone the repository:
 
-```
-git clone https://github.com/Turjoy-barua/StudyCompanion
-cd study-companion
+```bash
+git clone https://github.com/Turjoy-barua/StudyCompanion.git
+cd StudyCompanion
 ```
 
-2. Install dependencies:
+2. Create and activate a virtual environment:
 
+```bash
+python3 -m venv env
+source env/bin/activate
 ```
+
+3. Install dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-3. Run the app:
+4. Run the app:
 
+```bash
+flask --app app run
 ```
-streamlit run app.py
+
+5. Open the local site:
+
+```text
+http://127.0.0.1:5000
 ```
 
----
+You can also run the app directly:
 
-## 🎯 Future Improvements
+```bash
+python app.py
+```
 
-* 🔔 Smart notifications (study reminders)
-* 👤 User login system
-* 🌐 Online version (multi-user)
-* 📱 Mobile-friendly UI
-* 🍎 iOS app version (Swift)
+## Optional Supabase Setup
 
----
+The app works locally with SQLite without any Supabase configuration. To enable Supabase authentication and remote storage, create a `.env` file with:
 
-## 💡 Inspiration
+```env
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SECRET_KEY=replace_with_a_secure_secret
+APP_BASE_URL=http://127.0.0.1:5000
+```
 
-This project is inspired by the idea that:
+Then run the SQL in `supabase_schema.sql` in your Supabase project.
 
-> *Consistency beats intensity.*
+For account confirmation, password recovery, and Google login, configure Supabase Auth:
 
-Small daily study sessions, tracked and rewarded, can lead to big results over time.
+- Add `http://127.0.0.1:5000/auth/callback` and `http://127.0.0.1:5000/auth/reset-password` to Auth redirect URLs.
+- Enable email confirmations if you want users to verify ownership before login.
+- Enable the Google provider in Supabase Auth and add the Google OAuth client credentials there.
+- In production, set `APP_BASE_URL` to your deployed app URL and add the matching callback/reset URLs in Supabase.
 
----
+## Deployment
 
-## 🤝 Contributing
+The included `vercel.json` is intended for deploying the Flask app on Vercel. Make sure required environment variables are configured in the deployment platform if Supabase is enabled.
 
-Feel free to:
+## Future Improvements
 
-* Fork the project
-* Suggest new features
-* Improve UI/UX
+- Smart study reminders
+- More detailed analytics and charts
+- Mobile-focused layout refinements
+- Calendar integrations
+- Exportable study reports
 
----
+## Inspiration
 
-## 📜 License
-
-This project is open-source and available under the MIT License.
-
----
-
-## 👨‍💻 Author
-
-Built with ❤️ by a student, for students.
-
----
-
-## ⭐ Final Note
-
-If this app helps you stay consistent, focused, and motivated — then it has achieved its purpose.
-
-Happy studying! 🚀
+Consistency beats intensity. Small study sessions, tracked over time, make progress easier to see and easier to repeat.

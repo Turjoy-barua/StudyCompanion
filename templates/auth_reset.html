@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Reset password</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body class="auth-page">
+    <main class="auth-card">
+      <p class="eyebrow">Password recovery</p>
+      <h1>Create a new password</h1>
+      <p id="resetStatus" class="account-text">Enter a new password for your Study Companion account.</p>
+      <form action="{{ url_for('update_password') }}" method="post" class="account-form">
+        <label>
+          <span>New password</span>
+          <input type="password" name="password" placeholder="At least 6 characters" minlength="6" required>
+        </label>
+        <label>
+          <span>Confirm password</span>
+          <input type="password" name="confirm_password" placeholder="Repeat password" minlength="6" required>
+        </label>
+        <button type="submit">Update password</button>
+      </form>
+      <a href="{{ url_for('index') }}" class="text-button auth-return-link">Return to app</a>
+    </main>
+    <script>
+      (async function () {
+        const status = document.getElementById("resetStatus");
+        const params = new URLSearchParams(window.location.hash.slice(1));
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+
+        if (!accessToken || !refreshToken) {
+          return;
+        }
+
+        const response = await fetch("{{ url_for('set_auth_session') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }),
+        });
+        const result = await response.json().catch(() => ({ ok: false }));
+        if (!response.ok || !result.ok) {
+          status.textContent = result.error || "Could not open the password reset session.";
+          return;
+        }
+
+        window.history.replaceState(null, "", "{{ url_for('reset_password') }}");
+        status.textContent = "Reset link verified. Choose your new password.";
+      })();
+    </script>
+  </body>
+</html>

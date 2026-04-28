@@ -25,6 +25,8 @@
   const showSignup = document.getElementById("showSignup");
   const signupForm = document.getElementById("signupForm");
   const showLogin = document.getElementById("showLogin");
+  const showForgotPassword = document.getElementById("showForgotPassword");
+  const forgotPasswordForm = document.getElementById("forgotPasswordForm");
   const loginDisclosure = document.getElementById("loginDisclosure");
   const weeklyChart = document.getElementById("weeklyChart");
   const appThemeOptions = document.getElementById("appThemeOptions");
@@ -411,22 +413,30 @@
 
   function showAccountMode(mode) {
     const isSignup = mode === "signup";
+    const isForgotPassword = mode === "forgot-password";
     if (accountTitle) {
-      accountTitle.textContent = isSignup ? "Create a new account" : "Login to your account";
+      accountTitle.textContent = isSignup
+        ? "Create a new account"
+        : isForgotPassword
+          ? "Reset your password"
+          : "Login to your account";
     }
     if (loginForm) {
-      loginForm.hidden = isSignup;
+      loginForm.hidden = isSignup || isForgotPassword;
     }
     if (signupForm) {
       signupForm.hidden = !isSignup;
     }
+    if (forgotPasswordForm) {
+      forgotPasswordForm.hidden = !isForgotPassword;
+    }
     if (showSignup) {
-      showSignup.closest(".signup-disclosure").hidden = isSignup;
+      showSignup.closest(".signup-disclosure").hidden = isSignup || isForgotPassword;
     }
     if (loginDisclosure) {
-      loginDisclosure.hidden = !isSignup;
+      loginDisclosure.hidden = !isSignup && !isForgotPassword;
     }
-    const targetForm = isSignup ? signupForm : loginForm;
+    const targetForm = isSignup ? signupForm : isForgotPassword ? forgotPasswordForm : loginForm;
     targetForm?.querySelector("input")?.focus();
   }
 
@@ -472,6 +482,7 @@
   closeAccount?.addEventListener("click", () => toggleAccount(false));
   showSignup?.addEventListener("click", () => showAccountMode("signup"));
   showLogin?.addEventListener("click", () => showAccountMode("login"));
+  showForgotPassword?.addEventListener("click", () => showAccountMode("forgot-password"));
   focusOverlay?.addEventListener("click", (event) => {
     if (event.target === focusOverlay) {
       toggleFocus(false);

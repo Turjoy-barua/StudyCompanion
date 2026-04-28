@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Connecting account</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body class="auth-page">
+    <main class="auth-card">
+      <p class="eyebrow">Account access</p>
+      <h1>Connecting your account</h1>
+      <p id="authStatus" class="account-text">Finishing secure login...</p>
+      <a href="{{ url_for('index') }}" class="text-button">Return to app</a>
+    </main>
+    <script>
+      (async function () {
+        const status = document.getElementById("authStatus");
+        const params = new URLSearchParams(window.location.hash.slice(1));
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+
+        if (!accessToken || !refreshToken) {
+          status.textContent = "Could not find the Supabase session in this link.";
+          return;
+        }
+
+        const response = await fetch("{{ url_for('set_auth_session') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }),
+        });
+        const result = await response.json().catch(() => ({ ok: false }));
+        if (!response.ok || !result.ok) {
+          status.textContent = result.error || "Could not finish login.";
+          return;
+        }
+
+        window.location.replace("{{ url_for('index') }}");
+      })();
+    </script>
+  </body>
+</html>

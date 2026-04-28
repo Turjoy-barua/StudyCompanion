@@ -73,6 +73,11 @@
           {% endwith %}
 
           <section class="app-view is-active" data-view="dashboard">
+            {% if dashboard.is_demo %}
+              <section class="flash success">
+                Simulated two-week planner demo. This view uses generated data and does not modify your saved study records.
+              </section>
+            {% endif %}
             <header class="hero">
               <div class="hero-copy">
                 <div class="hero-quote-body">
@@ -128,6 +133,58 @@
                   {% endfor %}
                 {% else %}
                   <p class="empty-state">No forced plan yet. Add your own exams, projects, or study sessions first.</p>
+                {% endif %}
+              </div>
+            </section>
+
+            <section class="prediction-panel adaptive-plan-panel">
+              <div class="prediction-copy">
+                <p class="eyebrow">Adaptive planner</p>
+                <h2>Chapter plan</h2>
+                <p class="prediction-text">
+                  {{ dashboard.adaptive_study_plan.availableMinutesPerDay }} available minutes today, ranked by urgency, confidence, importance, coverage and difficulty.
+                </p>
+              </div>
+              <div class="adaptive-plan-list">
+                {% if dashboard.adaptive_study_plan.days %}
+                  {% for day in dashboard.adaptive_study_plan.days %}
+                    <div class="adaptive-plan-day">
+                      <div class="adaptive-plan-day-header">
+                        <strong>{{ day.date }}</strong>
+                        <span>{{ day.totalStudyMinutes }} min</span>
+                      </div>
+                      {% if day.blocks %}
+                        {% for block in day.blocks %}
+                          <article class="adaptive-plan-block">
+                            <div>
+                              <p class="planner-item-kind">{{ block.subject }}</p>
+                              <h3>{{ block.chapterTitle }}</h3>
+                              <p class="planner-meta">{{ block.durationMinutes }} min • {{ block.method }}</p>
+                              <p class="planner-chapters">{{ block.reason }}</p>
+                            </div>
+                            <form action="{{ url_for('change_chapter_confidence') }}" method="post" class="confidence-update-form">
+                              <input type="hidden" name="chapter_id" value="{{ block.chapterId }}">
+                              <label>
+                                <span>Confidence</span>
+                                <select name="confidence_level" required>
+                                  <option value="1">1</option>
+                                  <option value="2">2</option>
+                                  <option value="3">3</option>
+                                  <option value="4">4</option>
+                                  <option value="5">5</option>
+                                </select>
+                              </label>
+                              <button type="submit" class="small-action-button">Update</button>
+                            </form>
+                          </article>
+                        {% endfor %}
+                      {% else %}
+                        <p class="empty-state">No chapter blocks for this day.</p>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <p class="empty-state">Add chapters in an exam or project syllabus to generate chapter-level study blocks.</p>
                 {% endif %}
               </div>
             </section>
@@ -245,6 +302,7 @@
                           <th>Subject</th>
                           <th>Duration</th>
                           <th>Date</th>
+                          <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -253,6 +311,31 @@
                             <td>{{ session.subject }}</td>
                             <td>{{ session.duration_minutes }} min</td>
                             <td>{{ session.session_date }}</td>
+                            <td>
+                              <div class="row-actions">
+                                <details class="inline-edit">
+                                  <summary>Edit</summary>
+                                  <form action="{{ url_for('edit_session', session_id=session.id) }}" method="post" class="compact-edit-form">
+                                    <label>
+                                      <span>Subject</span>
+                                      <input type="text" name="subject" value="{{ session.subject }}" required>
+                                    </label>
+                                    <label>
+                                      <span>Minutes</span>
+                                      <input type="number" name="duration_minutes" min="1" step="1" value="{{ session.duration_minutes }}" required>
+                                    </label>
+                                    <label>
+                                      <span>Date</span>
+                                      <input type="date" name="session_date" value="{{ session.session_date }}" required>
+                                    </label>
+                                    <button type="submit" class="small-action-button">Save</button>
+                                  </form>
+                                </details>
+                                <form action="{{ url_for('remove_session', session_id=session.id) }}" method="post" onsubmit="return confirm('Delete this study session?');">
+                                  <button type="submit" class="small-action-button danger-button">Delete</button>
+                                </form>
+                              </div>
+                            </td>
                           </tr>
                         {% endfor %}
                       </tbody>
@@ -446,6 +529,10 @@
               <div class="planner-layout">
                 <form action="{{ url_for('create_academic_item') }}" method="post" class="planner-form">
                   <label><span>Title</span><input type="text" name="title" placeholder="Linear Algebra midterm" required></label>
+                  <label>
+                    <span>Subject</span>
+                    <input type="text" name="subject_name" list="studySubjectOptions" placeholder="Mathematics" required>
+                  </label>
                   <label><span>Type</span><select name="item_kind" required><option value="exam">Exam</option><option value="project">Project</option></select></label>
                   <label><span>Exam type</span><input type="text" name="exam_type" placeholder="Written, oral, lab, practical"></label>
                   <label class="planner-chapters-field">
@@ -474,7 +561,7 @@
                           </div>
                           <span class="planner-importance planner-importance-{{ item.importance.lower() }}">{{ item.importance }}</span>
                         </div>
-                        <p class="planner-meta">{% if item.exam_type %}{{ item.exam_type }} • {% endif %}Due {{ item.due_date }}</p>
+                        <p class="planner-meta">{{ item.subject_name }} • {% if item.exam_type %}{{ item.exam_type }} • {% endif %}Due {{ item.due_date }}</p>
                         {% if item.chapters %}
                           <p class="planner-chapters"><strong>Chapters:</strong> {{ item.chapters }}</p>
                         {% endif %}
@@ -489,6 +576,45 @@
                         </p>
                         <div class="confidence-bar"><span style="width: {{ item.confidence_percent }}%"></span></div>
                         <p class="planner-confidence">Confidence: {{ item.confidence_percent }}%</p>
+                        <div class="planner-item-actions">
+                          <details class="inline-edit">
+                            <summary>Edit</summary>
+                            <form action="{{ url_for('edit_academic_item', item_id=item.id) }}" method="post" class="compact-edit-form">
+                              <label><span>Title</span><input type="text" name="title" value="{{ item.title }}" required></label>
+                              <label><span>Subject</span><input type="text" name="subject_name" list="studySubjectOptions" value="{{ item.subject_name }}" required></label>
+                              <label>
+                                <span>Type</span>
+                                <select name="item_kind" required>
+                                  <option value="exam" {% if item.item_kind == 'Exam' %}selected{% endif %}>Exam</option>
+                                  <option value="project" {% if item.item_kind == 'Project' %}selected{% endif %}>Project</option>
+                                </select>
+                              </label>
+                              <label><span>Exam type</span><input type="text" name="exam_type" value="{{ item.exam_type }}" placeholder="Written, oral, lab, practical"></label>
+                              <label class="planner-chapters-field"><span>Chapters / syllabus</span><textarea name="chapters" rows="3">{{ item.chapters }}</textarea></label>
+                              <label>
+                                <span>Importance</span>
+                                <select name="importance" required>
+                                  <option value="critical" {% if item.importance == 'Critical' %}selected{% endif %}>Critical</option>
+                                  <option value="high" {% if item.importance == 'High' %}selected{% endif %}>High</option>
+                                  <option value="medium" {% if item.importance == 'Medium' %}selected{% endif %}>Medium</option>
+                                  <option value="low" {% if item.importance == 'Low' %}selected{% endif %}>Low</option>
+                                </select>
+                              </label>
+                              <label class="confidence-input-group">
+                                <span>Confidence (%)</span>
+                                <div class="confidence-slider-row">
+                                  <input type="range" name="confidence_percent" min="0" max="100" step="1" value="{{ item.confidence_percent }}" data-confidence-slider>
+                                  <strong class="confidence-slider-value" data-confidence-value>{{ item.confidence_percent }}%</strong>
+                                </div>
+                              </label>
+                              <label><span>Due date</span><input type="date" name="due_date" value="{{ item.due_date }}" required></label>
+                              <button type="submit" class="small-action-button">Save</button>
+                            </form>
+                          </details>
+                          <form action="{{ url_for('remove_academic_item', item_id=item.id) }}" method="post" onsubmit="return confirm('Delete this exam or project?');">
+                            <button type="submit" class="small-action-button danger-button">Delete</button>
+                          </form>
+                        </div>
                       </article>
                     {% endfor %}
                   {% else %}
@@ -498,6 +624,12 @@
               </div>
             </section>
           </section>
+
+          <datalist id="studySubjectOptions">
+            {% for subject in dashboard.study_subjects %}
+              <option value="{{ subject.name }}"></option>
+            {% endfor %}
+          </datalist>
 
           <section class="app-view" data-view="friends">
             <div class="view-header">
@@ -594,8 +726,12 @@
         {% else %}
           <h2 id="accountTitle">Login to your account</h2>
           <p class="account-text">
-            Use Supabase email authentication. After login, sessions and exams/projects are saved only for your account.
+            Use email confirmation, Google, or a reset link if you forget your password. After login, all study data is scoped to your account.
           </p>
+
+          <a href="{{ url_for('google_login') }}" class="oauth-button">Continue with Google</a>
+
+          <div class="account-divider"><span>or</span></div>
 
           <form action="{{ url_for('login') }}" method="post" class="account-form" id="loginForm">
             <label>
@@ -607,6 +743,7 @@
               <input type="password" name="password" placeholder="Enter password" required>
             </label>
             <button type="submit">Login</button>
+            <button type="button" id="showForgotPassword" class="text-button">Forgot password?</button>
           </form>
 
           <div class="signup-disclosure">
@@ -615,6 +752,10 @@
           </div>
 
           <form action="{{ url_for('signup') }}" method="post" class="account-form signup-form" id="signupForm" hidden>
+            <label>
+              <span>Display name</span>
+              <input type="text" name="display_name" placeholder="Turjoy Barua" maxlength="80" required>
+            </label>
             <label>
               <span>Email</span>
               <input type="email" name="email" placeholder="student@example.com" required>
@@ -628,6 +769,14 @@
               <input type="password" name="confirm_password" placeholder="Repeat password" minlength="6" required>
             </label>
             <button type="submit">Create account</button>
+          </form>
+
+          <form action="{{ url_for('forgot_password') }}" method="post" class="account-form" id="forgotPasswordForm" hidden>
+            <label>
+              <span>Email</span>
+              <input type="email" name="email" placeholder="student@example.com" required>
+            </label>
+            <button type="submit">Send reset email</button>
           </form>
 
           <div class="login-disclosure" id="loginDisclosure" hidden>

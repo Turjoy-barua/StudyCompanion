@@ -18,5 +18,7 @@ ENV/
 .env
 .env.*
 .python-version
+anonymisedData/
+models/*.joblib
 .idea/
 .vscode/

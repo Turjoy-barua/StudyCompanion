@@ -19,6 +19,7 @@ from utils import (
     delete_session,
     get_dashboard_data,
     init_db,
+    save_academic_risk_profile,
     update_academic_item,
     update_chapter_progress,
     update_session,
@@ -649,6 +650,26 @@ def create_study_subject():
         flash(str(exc), "error")
     else:
         flash("Subject saved.", "success")
+
+    return redirect(url_for("index"))
+
+
+@app.post("/risk-profile")
+@_login_required
+def save_risk_profile():
+    raw_profile = request.form.to_dict()
+    raw_profile["has_unregistered_by_cutoff"] = "1" if request.form.get("has_unregistered_by_cutoff") else "0"
+
+    try:
+        save_academic_risk_profile(
+            raw_profile,
+            supabase=_get_authenticated_supabase(),
+            user_id=_require_user_id(),
+        )
+    except ValueError as exc:
+        flash(str(exc), "error")
+    else:
+        flash("Academic risk model inputs saved.", "success")
 
     return redirect(url_for("index"))
 

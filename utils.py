@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from math import ceil
 from pathlib import Path
 
+from priority_model import AcademicRiskModel, build_ai_priority_predictions
 from supabase_client import create_supabase_client
 from study_planner import Chapter, generate_study_plan, plan_to_dict
 
@@ -52,9 +53,96 @@ FALLBACK_QUOTES = [
 SessionRecord = dict[str, object]
 AcademicItemRecord = dict[str, object]
 StudySubjectRecord = dict[str, object]
+AcademicRiskProfileRecord = dict[str, object]
 SUPABASE_ENABLED = bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_ANON_KEY"))
 CHAPTER_PROGRESS_STATUSES = {"not_started", "studying", "weak", "complete"}
 MAX_QUOTE_WORDS = 20
+RISK_PROFILE_NUMERIC_FIELDS = (
+    "num_of_prev_attempts",
+    "studied_credits",
+    "date_registration",
+    "module_presentation_length",
+    "has_unregistered_by_cutoff",
+    "assessment_submissions",
+    "assessment_score_mean",
+    "assessment_score_min",
+    "assessment_score_max",
+    "assessment_weight_sum",
+    "assessment_weighted_score_mean",
+    "assessment_late_count",
+    "assessment_days_before_due_mean",
+    "assessment_banked_count",
+    "assessments_due_by_cutoff",
+    "assessment_completion_ratio",
+    "vle_total_clicks",
+    "vle_clicks_pre_course",
+    "vle_clicks_first_14",
+    "vle_clicks_first_30",
+    "vle_clicks_recent_14",
+    "vle_active_days",
+    "vle_mean_clicks_active_day",
+    "vle_max_clicks_active_day",
+    "vle_activity_forumng",
+    "vle_activity_homepage",
+    "vle_activity_oucontent",
+    "vle_activity_page",
+    "vle_activity_quiz",
+    "vle_activity_resource",
+    "vle_activity_subpage",
+    "vle_activity_url",
+)
+RISK_PROFILE_TEXT_FIELDS = (
+    "code_module",
+    "code_presentation",
+    "gender",
+    "region",
+    "highest_education",
+    "imd_band",
+    "age_band",
+    "disability",
+)
+RISK_PROFILE_DEFAULTS: AcademicRiskProfileRecord = {
+    "code_module": "AAA",
+    "code_presentation": "2014J",
+    "gender": "M",
+    "region": "Unknown",
+    "highest_education": "A Level or Equivalent",
+    "imd_band": "Unknown",
+    "age_band": "0-35",
+    "disability": "N",
+    "num_of_prev_attempts": 0,
+    "studied_credits": 60,
+    "date_registration": -30,
+    "module_presentation_length": 240,
+    "has_unregistered_by_cutoff": 0,
+    "assessment_submissions": 0,
+    "assessment_score_mean": 0,
+    "assessment_score_min": 0,
+    "assessment_score_max": 0,
+    "assessment_weight_sum": 0,
+    "assessment_weighted_score_mean": 0,
+    "assessment_late_count": 0,
+    "assessment_days_before_due_mean": 0,
+    "assessment_banked_count": 0,
+    "assessments_due_by_cutoff": 0,
+    "assessment_completion_ratio": 0,
+    "vle_total_clicks": 0,
+    "vle_clicks_pre_course": 0,
+    "vle_clicks_first_14": 0,
+    "vle_clicks_first_30": 0,
+    "vle_clicks_recent_14": 0,
+    "vle_active_days": 0,
+    "vle_mean_clicks_active_day": 0,
+    "vle_max_clicks_active_day": 0,
+    "vle_activity_forumng": 0,
+    "vle_activity_homepage": 0,
+    "vle_activity_oucontent": 0,
+    "vle_activity_page": 0,
+    "vle_activity_quiz": 0,
+    "vle_activity_resource": 0,
+    "vle_activity_subpage": 0,
+    "vle_activity_url": 0,
+}
 
 
 def get_connection() -> sqlite3.Connection:
@@ -124,6 +212,56 @@ def init_db() -> None:
                 past_study_minutes INTEGER NOT NULL DEFAULT 0 CHECK(past_study_minutes >= 0),
                 estimated_total_minutes INTEGER,
                 difficulty INTEGER CHECK(difficulty >= 1 AND difficulty <= 5),
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS academic_risk_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                profile_key TEXT NOT NULL UNIQUE,
+                user_id TEXT,
+                code_module TEXT NOT NULL,
+                code_presentation TEXT NOT NULL,
+                gender TEXT NOT NULL,
+                region TEXT NOT NULL,
+                highest_education TEXT NOT NULL,
+                imd_band TEXT NOT NULL,
+                age_band TEXT NOT NULL,
+                disability TEXT NOT NULL,
+                num_of_prev_attempts REAL NOT NULL DEFAULT 0,
+                studied_credits REAL NOT NULL DEFAULT 0,
+                date_registration REAL NOT NULL DEFAULT 0,
+                module_presentation_length REAL NOT NULL DEFAULT 0,
+                has_unregistered_by_cutoff REAL NOT NULL DEFAULT 0,
+                assessment_submissions REAL NOT NULL DEFAULT 0,
+                assessment_score_mean REAL NOT NULL DEFAULT 0,
+                assessment_score_min REAL NOT NULL DEFAULT 0,
+                assessment_score_max REAL NOT NULL DEFAULT 0,
+                assessment_weight_sum REAL NOT NULL DEFAULT 0,
+                assessment_weighted_score_mean REAL NOT NULL DEFAULT 0,
+                assessment_late_count REAL NOT NULL DEFAULT 0,
+                assessment_days_before_due_mean REAL NOT NULL DEFAULT 0,
+                assessment_banked_count REAL NOT NULL DEFAULT 0,
+                assessments_due_by_cutoff REAL NOT NULL DEFAULT 0,
+                assessment_completion_ratio REAL NOT NULL DEFAULT 0,
+                vle_total_clicks REAL NOT NULL DEFAULT 0,
+                vle_clicks_pre_course REAL NOT NULL DEFAULT 0,
+                vle_clicks_first_14 REAL NOT NULL DEFAULT 0,
+                vle_clicks_first_30 REAL NOT NULL DEFAULT 0,
+                vle_clicks_recent_14 REAL NOT NULL DEFAULT 0,
+                vle_active_days REAL NOT NULL DEFAULT 0,
+                vle_mean_clicks_active_day REAL NOT NULL DEFAULT 0,
+                vle_max_clicks_active_day REAL NOT NULL DEFAULT 0,
+                vle_activity_forumng REAL NOT NULL DEFAULT 0,
+                vle_activity_homepage REAL NOT NULL DEFAULT 0,
+                vle_activity_oucontent REAL NOT NULL DEFAULT 0,
+                vle_activity_page REAL NOT NULL DEFAULT 0,
+                vle_activity_quiz REAL NOT NULL DEFAULT 0,
+                vle_activity_resource REAL NOT NULL DEFAULT 0,
+                vle_activity_subpage REAL NOT NULL DEFAULT 0,
+                vle_activity_url REAL NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL
             )
             """
@@ -205,6 +343,83 @@ def _normalize_study_subject_record(record: dict[str, object]) -> StudySubjectRe
         "notes": record.get("notes") or "",
         "created_at": str(record.get("created_at", "")),
     }
+
+
+def _normalize_academic_risk_profile_record(record: dict[str, object]) -> AcademicRiskProfileRecord:
+    normalized: AcademicRiskProfileRecord = {
+        "id": record.get("id"),
+        "user_id": record.get("user_id"),
+        "updated_at": str(record.get("updated_at", "")),
+    }
+    for field in RISK_PROFILE_TEXT_FIELDS:
+        normalized[field] = str(record.get(field) or RISK_PROFILE_DEFAULTS[field])
+    for field in RISK_PROFILE_NUMERIC_FIELDS:
+        try:
+            normalized[field] = float(record.get(field, RISK_PROFILE_DEFAULTS[field]) or 0)
+        except (TypeError, ValueError):
+            normalized[field] = float(RISK_PROFILE_DEFAULTS[field])
+    normalized["has_unregistered_by_cutoff"] = 1 if float(normalized["has_unregistered_by_cutoff"]) else 0
+    return normalized
+
+
+def _sanitize_academic_risk_profile(raw_profile: dict[str, object]) -> AcademicRiskProfileRecord:
+    normalized: AcademicRiskProfileRecord = {}
+    for field in RISK_PROFILE_TEXT_FIELDS:
+        value = " ".join(str(raw_profile.get(field, RISK_PROFILE_DEFAULTS[field])).strip().split())
+        normalized[field] = value or RISK_PROFILE_DEFAULTS[field]
+
+    for field in RISK_PROFILE_NUMERIC_FIELDS:
+        raw_value = raw_profile.get(field, RISK_PROFILE_DEFAULTS[field])
+        if raw_value in ("", None):
+            raw_value = RISK_PROFILE_DEFAULTS[field]
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{field.replace('_', ' ').title()} must be numeric.") from exc
+        normalized[field] = value
+
+    for field in (
+        "num_of_prev_attempts",
+        "studied_credits",
+        "module_presentation_length",
+        "assessment_submissions",
+        "assessment_late_count",
+        "assessment_banked_count",
+        "assessments_due_by_cutoff",
+        "vle_total_clicks",
+        "vle_clicks_pre_course",
+        "vle_clicks_first_14",
+        "vle_clicks_first_30",
+        "vle_clicks_recent_14",
+        "vle_active_days",
+        "vle_mean_clicks_active_day",
+        "vle_max_clicks_active_day",
+        "vle_activity_forumng",
+        "vle_activity_homepage",
+        "vle_activity_oucontent",
+        "vle_activity_page",
+        "vle_activity_quiz",
+        "vle_activity_resource",
+        "vle_activity_subpage",
+        "vle_activity_url",
+    ):
+        if float(normalized[field]) < 0:
+            raise ValueError(f"{field.replace('_', ' ').title()} cannot be negative.")
+
+    for field in ("assessment_score_mean", "assessment_score_min", "assessment_score_max", "assessment_weighted_score_mean"):
+        if not 0 <= float(normalized[field]) <= 100:
+            raise ValueError(f"{field.replace('_', ' ').title()} must be between 0 and 100.")
+
+    completion_ratio = float(normalized["assessment_completion_ratio"])
+    if not 0 <= completion_ratio <= 1:
+        raise ValueError("Assessment completion ratio must be between 0 and 1.")
+
+    normalized["has_unregistered_by_cutoff"] = 1 if float(normalized["has_unregistered_by_cutoff"]) else 0
+    return normalized
+
+
+def _risk_profile_key(user_id: str | None = None) -> str:
+    return user_id or "local"
 
 
 def _confidence_percent_to_level(confidence_percent: int) -> int:
@@ -1043,6 +1258,94 @@ def fetch_study_subjects(
     return [_normalize_study_subject_record(dict(row)) for row in rows]
 
 
+def save_academic_risk_profile(
+    raw_profile: dict[str, object],
+    supabase: object | None = None,
+    user_id: str | None = None,
+) -> None:
+    profile = _sanitize_academic_risk_profile(raw_profile)
+    updated_at = datetime.now().isoformat(timespec="seconds")
+    payload = {**profile, "user_id": user_id, "updated_at": updated_at}
+
+    supabase = _get_supabase(supabase)
+    use_local_fallback = not SUPABASE_ENABLED
+    if supabase is not None:
+        try:
+            supabase_payload = dict(payload)
+            supabase.table("academic_risk_profiles").upsert(supabase_payload, on_conflict="user_id").execute()
+            return
+        except Exception as exc:
+            if _is_missing_supabase_table(exc, "academic_risk_profiles"):
+                use_local_fallback = True
+            elif SUPABASE_ENABLED:
+                raise ValueError(
+                    "Could not save the academic risk profile to Supabase. "
+                    "Run the academic_risk_profiles schema in supabase_schema.sql. "
+                    f"{exc}"
+                )
+
+    if not use_local_fallback and SUPABASE_ENABLED:
+        raise ValueError("Login is required before saving the academic risk profile.")
+
+    fields = list(RISK_PROFILE_TEXT_FIELDS + RISK_PROFILE_NUMERIC_FIELDS)
+    insert_columns = ["profile_key", "user_id", *fields, "updated_at"]
+    placeholders = ", ".join("?" for _ in insert_columns)
+    update_assignments = ", ".join(f"{field} = excluded.{field}" for field in ["user_id", *fields, "updated_at"])
+    values = [_risk_profile_key(user_id), user_id, *(profile[field] for field in fields), updated_at]
+
+    with get_connection() as connection:
+        connection.execute(
+            f"""
+            INSERT INTO academic_risk_profiles ({", ".join(insert_columns)})
+            VALUES ({placeholders})
+            ON CONFLICT(profile_key) DO UPDATE SET
+                {update_assignments}
+            """,
+            values,
+        )
+
+
+def fetch_academic_risk_profile(
+    supabase: object | None = None,
+    user_id: str | None = None,
+) -> AcademicRiskProfileRecord | None:
+    supabase = _get_supabase(supabase)
+    use_local_fallback = not SUPABASE_ENABLED
+    fields = ["id", "user_id", *RISK_PROFILE_TEXT_FIELDS, *RISK_PROFILE_NUMERIC_FIELDS, "updated_at"]
+
+    if supabase is not None:
+        if SUPABASE_ENABLED and not user_id:
+            return None
+        try:
+            query = supabase.table("academic_risk_profiles").select(", ".join(fields))
+            if user_id:
+                query = query.eq("user_id", user_id)
+            response = query.limit(1).execute()
+            records = response.data or []
+            return _normalize_academic_risk_profile_record(records[0]) if records else None
+        except Exception as exc:
+            if _is_missing_supabase_table(exc, "academic_risk_profiles"):
+                use_local_fallback = True
+            elif SUPABASE_ENABLED:
+                return None
+
+    if not use_local_fallback and SUPABASE_ENABLED:
+        return None
+
+    with get_connection() as connection:
+        row = connection.execute(
+            f"""
+            SELECT {", ".join(fields)}
+            FROM academic_risk_profiles
+            WHERE profile_key = ?
+            LIMIT 1
+            """,
+            (_risk_profile_key(user_id),),
+        ).fetchone()
+
+    return _normalize_academic_risk_profile_record(dict(row)) if row else None
+
+
 def _calculate_streak(session_dates: set[date]) -> int:
     streak = 0
     cursor = date.today()
@@ -1552,6 +1855,104 @@ def _build_adaptive_study_plan(
     }
 
 
+def _risk_profile_to_feature_row(profile: AcademicRiskProfileRecord) -> dict:
+    feature_row = {
+        field: profile.get(field, RISK_PROFILE_DEFAULTS[field])
+        for field in RISK_PROFILE_TEXT_FIELDS + RISK_PROFILE_NUMERIC_FIELDS
+    }
+    feature_row["registration_days_before_start"] = abs(float(feature_row.get("date_registration") or 0))
+    return feature_row
+
+
+def _build_academic_risk_prediction(profile: AcademicRiskProfileRecord | None) -> dict:
+    model = AcademicRiskModel()
+    metrics = {}
+    if model.is_available:
+        try:
+            metrics = model.metrics()
+        except Exception:
+            metrics = {}
+
+    base_response = {
+        "headline": "Academic risk model",
+        "model_available": model.is_available,
+        "metrics": {
+            "roc_auc": round(float(metrics.get("roc_auc", 0)), 3) if metrics else None,
+            "f1": round(float(metrics.get("f1", 0)), 3) if metrics else None,
+            "cutoff_day": metrics.get("cutoff_day") if metrics else None,
+        },
+        "profile": profile,
+    }
+
+    if profile is None:
+        return {
+            **base_response,
+            "status": "missing_profile",
+            "summary": "Add model inputs in Planner to predict academic risk from the trained model.",
+            "risk_score": None,
+            "risk_label": "unknown",
+            "risk_probability": None,
+            "drivers": [],
+        }
+
+    if not model.is_available:
+        return {
+            **base_response,
+            "status": "missing_model",
+            "summary": "Train the model before academic risk prediction is available.",
+            "risk_score": None,
+            "risk_label": "unknown",
+            "risk_probability": None,
+            "drivers": [],
+        }
+
+    try:
+        prediction = model.predict_risk([_risk_profile_to_feature_row(profile)])[0]
+    except Exception as exc:
+        return {
+            **base_response,
+            "status": "prediction_error",
+            "summary": f"Could not run the academic risk model. {exc}",
+            "risk_score": None,
+            "risk_label": "unknown",
+            "risk_probability": None,
+            "drivers": [],
+        }
+
+    risk_score = int(prediction["risk_score"])
+    risk_label = str(prediction["risk_label"])
+    drivers = []
+    if float(profile["vle_total_clicks"]) < 50:
+        drivers.append("Low total course engagement")
+    if float(profile["vle_active_days"]) < 8:
+        drivers.append("Few active study days")
+    if float(profile["assessment_submissions"]) < max(float(profile["assessments_due_by_cutoff"]), 1):
+        drivers.append("Missing expected assessment submissions")
+    if float(profile["assessment_score_mean"]) and float(profile["assessment_score_mean"]) < 55:
+        drivers.append("Assessment average is below the pass buffer")
+    if float(profile["assessment_late_count"]) > 0:
+        drivers.append("Late submissions are present")
+    if not drivers:
+        drivers.append("Risk is mostly based on the full course-engagement pattern")
+
+    if risk_label == "high":
+        summary = "High predicted academic risk. Prioritize engagement and assessment recovery now."
+    elif risk_label == "medium":
+        summary = "Medium predicted academic risk. Keep the course active and close assessment gaps."
+    else:
+        summary = "Low predicted academic risk. Maintain the current study rhythm."
+
+    return {
+        **base_response,
+        "status": "ready",
+        "summary": summary,
+        "risk_score": risk_score,
+        "risk_label": risk_label,
+        "risk_probability": round(float(prediction["risk_probability"]), 3),
+        "drivers": drivers[:4],
+    }
+
+
 def _get_two_week_simulation_records() -> tuple[list[SessionRecord], list[AcademicItemRecord], list[StudySubjectRecord]]:
     today = date.today()
     sessions: list[SessionRecord] = []
@@ -1659,10 +2060,12 @@ def get_dashboard_data(
 ) -> dict:
     if demo:
         sessions, academic_items, study_subjects = _get_two_week_simulation_records()
+        academic_risk_profile = None
     else:
         sessions = fetch_sessions(supabase=supabase, user_id=user_id)
         academic_items = fetch_academic_items(limit=8, supabase=supabase, user_id=user_id)
         study_subjects = fetch_study_subjects(supabase=supabase, user_id=user_id)
+        academic_risk_profile = fetch_academic_risk_profile(supabase=supabase, user_id=user_id)
     today = date.today()
     today_iso = today.isoformat()
     current_month = today.month
@@ -1726,8 +2129,6 @@ def get_dashboard_data(
     ]
     motivation = get_daily_motivation()
     subject_priorities = _build_subject_priorities(study_subjects, subject_totals, weekly_subject_totals)
-    forced_plan = _build_daily_forced_plan(sessions, academic_items, study_subjects, weekly_subject_totals)
-    next_best_action = _build_next_best_action(academic_items, subject_totals)
     adaptive_study_plan = _build_adaptive_study_plan(
         academic_items,
         subject_totals,
@@ -1736,6 +2137,17 @@ def get_dashboard_data(
         horizon_days=14 if demo else 7,
         user_id=user_id,
     )
+    forced_plan = _build_daily_forced_plan(sessions, academic_items, study_subjects, weekly_subject_totals)
+    next_best_action = _build_next_best_action(academic_items, subject_totals)
+    ai_priority_predictor = build_ai_priority_predictions(
+        sessions,
+        academic_items,
+        study_subjects,
+        subject_totals,
+        weekly_subject_totals,
+        adaptive_study_plan,
+    )
+    academic_risk_prediction = _build_academic_risk_prediction(academic_risk_profile)
     upcoming_items = []
     for item in academic_items:
         due_date = datetime.strptime(item["due_date"], "%Y-%m-%d").date()
@@ -1769,6 +2181,9 @@ def get_dashboard_data(
         "motivation": motivation,
         "forced_plan": forced_plan,
         "next_best_action": next_best_action,
+        "ai_priority_predictor": ai_priority_predictor,
+        "academic_risk_prediction": academic_risk_prediction,
+        "academic_risk_profile": academic_risk_profile or dict(RISK_PROFILE_DEFAULTS),
         "adaptive_study_plan": adaptive_study_plan,
         "study_subjects": study_subjects,
         "subject_priorities": subject_priorities,

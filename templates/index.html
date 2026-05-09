@@ -106,6 +106,68 @@
               </div>
             </header>
 
+            <section class="ai-priority-panel">
+              <div class="ai-priority-header">
+                <div>
+                  <p class="eyebrow">AI priority</p>
+                  <h2>{{ dashboard.ai_priority_predictor.headline }}</h2>
+                  <p class="ai-priority-summary">{{ dashboard.ai_priority_predictor.summary }}</p>
+                </div>
+              </div>
+              <div class="ai-priority-list">
+                {% if dashboard.ai_priority_predictor["items"] %}
+                  {% for item in dashboard.ai_priority_predictor["items"] %}
+                    <article class="ai-priority-item ai-priority-source-{{ item.source }}">
+                      <div class="ai-priority-rank">#{{ item.rank }}</div>
+                      <div class="ai-priority-body">
+                        <div class="ai-priority-title-row">
+                          <div>
+                            <p class="planner-item-kind">{{ item.kind }} • {{ item.subject }}</p>
+                            <h3>{{ item.title }}</h3>
+                          </div>
+                          <strong>{{ item.score }}/100</strong>
+                        </div>
+                        <p class="ai-priority-why">{{ item.urgency }}. {{ item.why }}</p>
+                        <p class="ai-priority-next">{{ item.next_step }}</p>
+                      </div>
+                    </article>
+                  {% endfor %}
+                {% else %}
+                  <p class="empty-state">No predictions yet. Add subjects, exams, projects, or sessions first.</p>
+                {% endif %}
+              </div>
+            </section>
+
+            <section class="risk-model-panel">
+              <div class="risk-model-copy">
+                <p class="eyebrow">Academic risk ML</p>
+                <h2>{{ dashboard.academic_risk_prediction.headline }}</h2>
+                <p>{{ dashboard.academic_risk_prediction.summary }}</p>
+              </div>
+              <div class="risk-model-score risk-model-score-{{ dashboard.academic_risk_prediction.risk_label }}">
+                {% if dashboard.academic_risk_prediction.risk_score is not none %}
+                  <span>Risk score</span>
+                  <strong>{{ dashboard.academic_risk_prediction.risk_score }}/100</strong>
+                  <small>{{ dashboard.academic_risk_prediction.risk_label.title() }} risk</small>
+                {% else %}
+                  <span>Status</span>
+                  <strong>Not ready</strong>
+                  <small>Save model inputs first</small>
+                {% endif %}
+              </div>
+              <div class="risk-model-details">
+                {% if dashboard.academic_risk_prediction.drivers %}
+                  {% for driver in dashboard.academic_risk_prediction.drivers %}
+                    <span>{{ driver }}</span>
+                  {% endfor %}
+                {% endif %}
+                {% if dashboard.academic_risk_prediction.metrics.roc_auc %}
+                  <span>ROC AUC {{ dashboard.academic_risk_prediction.metrics.roc_auc }}</span>
+                  <span>F1 {{ dashboard.academic_risk_prediction.metrics.f1 }}</span>
+                {% endif %}
+              </div>
+            </section>
+
             <section class="forced-plan-panel">
               <div class="forced-plan-header">
                 <div>
@@ -481,6 +543,15 @@
                   <small>Deadlines and syllabus</small>
                 </span>
               </button>
+              <button type="button" class="planner-switch-card" data-planner-section-target="risk" aria-pressed="false">
+                <span class="planner-switch-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5Zm1 5v5h4v2h-6V7Z"></path></svg>
+                </span>
+                <span>
+                  <strong>Risk model</strong>
+                  <small>ML prediction inputs</small>
+                </span>
+              </button>
             </div>
             <section class="panel subjects-manager-panel" data-planner-section="subjects">
               <div class="section-heading">
@@ -630,6 +701,89 @@
                   {% else %}
                     <p class="empty-state">Add your next exam or project so the app can keep the pressure visible.</p>
                   {% endif %}
+                </div>
+              </div>
+            </section>
+            <section class="panel risk-profile-panel" data-planner-section="risk" hidden>
+              {% set risk_profile = dashboard.academic_risk_profile %}
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Machine learning</p>
+                  <h2>Academic risk inputs</h2>
+                </div>
+              </div>
+              <div class="planner-layout risk-profile-layout">
+                <form action="{{ url_for('save_risk_profile') }}" method="post" class="planner-form risk-profile-form">
+                  <div class="form-group-heading">Course context</div>
+                  <label><span>Course code</span><input type="text" name="code_module" value="{{ risk_profile.code_module }}" required></label>
+                  <label><span>Presentation</span><input type="text" name="code_presentation" value="{{ risk_profile.code_presentation }}" required></label>
+                  <label><span>Course length (days)</span><input type="number" name="module_presentation_length" min="1" step="1" value="{{ risk_profile.module_presentation_length|int }}" required></label>
+                  <label><span>Studied credits</span><input type="number" name="studied_credits" min="0" step="1" value="{{ risk_profile.studied_credits|int }}" required></label>
+                  <label><span>Previous attempts</span><input type="number" name="num_of_prev_attempts" min="0" step="1" value="{{ risk_profile.num_of_prev_attempts|int }}" required></label>
+                  <label><span>Registration day</span><input type="number" name="date_registration" step="1" value="{{ risk_profile.date_registration|int }}" required></label>
+
+                  <div class="form-group-heading">Student context</div>
+                  <label><span>Gender</span><select name="gender" required><option value="M" {% if risk_profile.gender == 'M' %}selected{% endif %}>M</option><option value="F" {% if risk_profile.gender == 'F' %}selected{% endif %}>F</option></select></label>
+                  <label><span>Region</span><input type="text" name="region" value="{{ risk_profile.region }}" required></label>
+                  <label><span>Education</span><input type="text" name="highest_education" value="{{ risk_profile.highest_education }}" required></label>
+                  <label><span>IMD band</span><input type="text" name="imd_band" value="{{ risk_profile.imd_band }}" required></label>
+                  <label><span>Age band</span><select name="age_band" required><option value="0-35" {% if risk_profile.age_band == '0-35' %}selected{% endif %}>0-35</option><option value="35-55" {% if risk_profile.age_band == '35-55' %}selected{% endif %}>35-55</option><option value="55<=" {% if risk_profile.age_band == '55<=' %}selected{% endif %}>55<=</option></select></label>
+                  <label><span>Disability</span><select name="disability" required><option value="N" {% if risk_profile.disability == 'N' %}selected{% endif %}>No</option><option value="Y" {% if risk_profile.disability == 'Y' %}selected{% endif %}>Yes</option></select></label>
+
+                  <div class="form-group-heading">Engagement by day 60</div>
+                  <label><span>Total clicks</span><input type="number" name="vle_total_clicks" min="0" step="1" value="{{ risk_profile.vle_total_clicks|int }}" required></label>
+                  <label><span>Pre-course clicks</span><input type="number" name="vle_clicks_pre_course" min="0" step="1" value="{{ risk_profile.vle_clicks_pre_course|int }}" required></label>
+                  <label><span>First 14 days clicks</span><input type="number" name="vle_clicks_first_14" min="0" step="1" value="{{ risk_profile.vle_clicks_first_14|int }}" required></label>
+                  <label><span>First 30 days clicks</span><input type="number" name="vle_clicks_first_30" min="0" step="1" value="{{ risk_profile.vle_clicks_first_30|int }}" required></label>
+                  <label><span>Recent 14 days clicks</span><input type="number" name="vle_clicks_recent_14" min="0" step="1" value="{{ risk_profile.vle_clicks_recent_14|int }}" required></label>
+                  <label><span>Active days</span><input type="number" name="vle_active_days" min="0" step="1" value="{{ risk_profile.vle_active_days|int }}" required></label>
+                  <label><span>Mean clicks / active day</span><input type="number" name="vle_mean_clicks_active_day" min="0" step="0.1" value="{{ risk_profile.vle_mean_clicks_active_day }}" required></label>
+                  <label><span>Max clicks / active day</span><input type="number" name="vle_max_clicks_active_day" min="0" step="1" value="{{ risk_profile.vle_max_clicks_active_day|int }}" required></label>
+
+                  <div class="form-group-heading">Activity clicks</div>
+                  <label><span>Resources</span><input type="number" name="vle_activity_resource" min="0" step="1" value="{{ risk_profile.vle_activity_resource|int }}" required></label>
+                  <label><span>Subpages</span><input type="number" name="vle_activity_subpage" min="0" step="1" value="{{ risk_profile.vle_activity_subpage|int }}" required></label>
+                  <label><span>Content</span><input type="number" name="vle_activity_oucontent" min="0" step="1" value="{{ risk_profile.vle_activity_oucontent|int }}" required></label>
+                  <label><span>Forums</span><input type="number" name="vle_activity_forumng" min="0" step="1" value="{{ risk_profile.vle_activity_forumng|int }}" required></label>
+                  <label><span>Quizzes</span><input type="number" name="vle_activity_quiz" min="0" step="1" value="{{ risk_profile.vle_activity_quiz|int }}" required></label>
+                  <label><span>URLs</span><input type="number" name="vle_activity_url" min="0" step="1" value="{{ risk_profile.vle_activity_url|int }}" required></label>
+                  <label><span>Homepages</span><input type="number" name="vle_activity_homepage" min="0" step="1" value="{{ risk_profile.vle_activity_homepage|int }}" required></label>
+                  <label><span>Pages</span><input type="number" name="vle_activity_page" min="0" step="1" value="{{ risk_profile.vle_activity_page|int }}" required></label>
+
+                  <div class="form-group-heading">Assessments by day 60</div>
+                  <label><span>Submissions</span><input type="number" name="assessment_submissions" min="0" step="1" value="{{ risk_profile.assessment_submissions|int }}" required></label>
+                  <label><span>Assessments due</span><input type="number" name="assessments_due_by_cutoff" min="0" step="1" value="{{ risk_profile.assessments_due_by_cutoff|int }}" required></label>
+                  <label><span>Completion ratio</span><input type="number" name="assessment_completion_ratio" min="0" max="1" step="0.01" value="{{ risk_profile.assessment_completion_ratio }}" required></label>
+                  <label><span>Average score</span><input type="number" name="assessment_score_mean" min="0" max="100" step="0.1" value="{{ risk_profile.assessment_score_mean }}" required></label>
+                  <label><span>Lowest score</span><input type="number" name="assessment_score_min" min="0" max="100" step="0.1" value="{{ risk_profile.assessment_score_min }}" required></label>
+                  <label><span>Highest score</span><input type="number" name="assessment_score_max" min="0" max="100" step="0.1" value="{{ risk_profile.assessment_score_max }}" required></label>
+                  <label><span>Weight submitted</span><input type="number" name="assessment_weight_sum" min="0" step="0.1" value="{{ risk_profile.assessment_weight_sum }}" required></label>
+                  <label><span>Weighted average</span><input type="number" name="assessment_weighted_score_mean" min="0" max="100" step="0.1" value="{{ risk_profile.assessment_weighted_score_mean }}" required></label>
+                  <label><span>Late submissions</span><input type="number" name="assessment_late_count" min="0" step="1" value="{{ risk_profile.assessment_late_count|int }}" required></label>
+                  <label><span>Days before due avg</span><input type="number" name="assessment_days_before_due_mean" step="0.1" value="{{ risk_profile.assessment_days_before_due_mean }}" required></label>
+                  <label><span>Banked submissions</span><input type="number" name="assessment_banked_count" min="0" step="1" value="{{ risk_profile.assessment_banked_count|int }}" required></label>
+                  <label class="checkbox-field"><input type="checkbox" name="has_unregistered_by_cutoff" value="1" {% if risk_profile.has_unregistered_by_cutoff %}checked{% endif %}><span>Unregistered by day 60</span></label>
+                  <button type="submit">Save model inputs</button>
+                </form>
+
+                <div class="planner-list risk-result-list">
+                  <article class="planner-item">
+                    <div class="planner-item-top">
+                      <div>
+                        <p class="planner-item-kind">Current prediction</p>
+                        <h3>{{ dashboard.academic_risk_prediction.risk_label.title() }} risk</h3>
+                      </div>
+                      <span class="planner-importance planner-importance-high">
+                        {% if dashboard.academic_risk_prediction.risk_score is not none %}{{ dashboard.academic_risk_prediction.risk_score }}/100{% else %}No score{% endif %}
+                      </span>
+                    </div>
+                    <p class="planner-meta">{{ dashboard.academic_risk_prediction.summary }}</p>
+                    {% if dashboard.academic_risk_prediction.drivers %}
+                      {% for driver in dashboard.academic_risk_prediction.drivers %}
+                        <p class="planner-chapters">{{ driver }}</p>
+                      {% endfor %}
+                    {% endif %}
+                  </article>
                 </div>
               </div>
             </section>

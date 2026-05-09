@@ -1,0 +1,109 @@
+{
+  "rows": 32593,
+  "train_rows": 26122,
+  "test_rows": 6471,
+  "positive_rate": 0.527966127696131,
+  "roc_auc": 0.8964161648656481,
+  "average_precision": 0.9221547957139828,
+  "accuracy": 0.8153299335496832,
+  "precision": 0.8820672910163024,
+  "recall": 0.7483814008240142,
+  "f1": 0.8097436713899061,
+  "confusion_matrix": [
+    [
+      2733,
+      340
+    ],
+    [
+      855,
+      2543
+    ]
+  ],
+  "classification_report": {
+    "0": {
+      "precision": 0.7617056856187291,
+      "recall": 0.8893589326391149,
+      "f1-score": 0.8205975078816995,
+      "support": 3073.0
+    },
+    "1": {
+      "precision": 0.8820672910163024,
+      "recall": 0.7483814008240142,
+      "f1-score": 0.8097436713899061,
+      "support": 3398.0
+    },
+    "accuracy": 0.8153299335496832,
+    "macro avg": {
+      "precision": 0.8218864883175158,
+      "recall": 0.8188701667315645,
+      "f1-score": 0.8151705896358028,
+      "support": 6471.0
+    },
+    "weighted avg": {
+      "precision": 0.8249090135650983,
+      "recall": 0.8153299335496832,
+      "f1-score": 0.8148980276778494,
+      "support": 6471.0
+    }
+  },
+  "numeric_features": [
+    "num_of_prev_attempts",
+    "studied_credits",
+    "date_registration",
+    "module_presentation_length",
+    "assessment_submissions",
+    "assessment_score_mean",
+    "assessment_score_min",
+    "assessment_score_max",
+    "assessment_weight_sum",
+    "assessment_weighted_score_sum",
+    "assessment_late_count",
+    "assessment_days_before_due_mean",
+    "assessment_banked_count",
+    "assessment_weighted_score_mean",
+    "assessments_due_by_cutoff",
+    "assessment_completion_ratio",
+    "vle_total_clicks",
+    "vle_clicks_pre_course",
+    "vle_clicks_first_14",
+    "vle_clicks_first_30",
+    "vle_clicks_recent_14",
+    "vle_active_days",
+    "vle_mean_clicks_active_day",
+    "vle_max_clicks_active_day",
+    "vle_activity_dataplus",
+    "vle_activity_forumng",
+    "vle_activity_glossary",
+    "vle_activity_homepage",
+    "vle_activity_oucollaborate",
+    "vle_activity_oucontent",
+    "vle_activity_ouelluminate",
+    "vle_activity_quiz",
+    "vle_activity_resource",
+    "vle_activity_sharedsubpage",
+    "vle_activity_subpage",
+    "vle_activity_url",
+    "vle_activity_externalquiz",
+    "vle_activity_ouwiki",
+    "vle_activity_page",
+    "vle_activity_dualpane",
+    "vle_activity_questionnaire",
+    "vle_activity_repeatactivity",
+    "vle_activity_htmlactivity",
+    "registration_days_before_start",
+    "has_unregistered_by_cutoff"
+  ],
+  "categorical_features": [
+    "code_module",
+    "code_presentation",
+    "gender",
+    "region",
+    "highest_education",
+    "imd_band",
+    "age_band",
+    "disability"
+  ],
+  "created_at": "2026-05-10T01:26:13",
+  "cutoff_day": 60,
+  "target": "at_risk = final_result in {'Fail', 'Withdrawn'}"
+}

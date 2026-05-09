@@ -1,4 +1,7 @@
 Flask==3.0.3
 kagglehub[pandas-datasets]
+joblib
+pandas
 python-dotenv
+scikit-learn
 supabase

@@ -160,18 +160,28 @@
                               <p class="planner-item-kind">{{ block.subject }}</p>
                               <h3>{{ block.chapterTitle }}</h3>
                               <p class="planner-meta">{{ block.durationMinutes }} min • {{ block.method }}</p>
+                              <p class="chapter-status-chip chapter-status-{{ block.progressStatus }}">{{ block.progressStatus.replace('_', ' ').title() }}</p>
                               <p class="planner-chapters">{{ block.reason }}</p>
                             </div>
-                            <form action="{{ url_for('change_chapter_confidence') }}" method="post" class="confidence-update-form">
+                            <form action="{{ url_for('change_chapter_progress') }}" method="post" class="confidence-update-form">
                               <input type="hidden" name="chapter_id" value="{{ block.chapterId }}">
+                              <label>
+                                <span>Status</span>
+                                <select name="progress_status" required>
+                                  <option value="not_started" {% if block.progressStatus == 'not_started' %}selected{% endif %}>Not started</option>
+                                  <option value="studying" {% if block.progressStatus == 'studying' %}selected{% endif %}>Studying</option>
+                                  <option value="weak" {% if block.progressStatus == 'weak' %}selected{% endif %}>Weak</option>
+                                  <option value="complete" {% if block.progressStatus == 'complete' %}selected{% endif %}>Complete</option>
+                                </select>
+                              </label>
                               <label>
                                 <span>Confidence</span>
                                 <select name="confidence_level" required>
-                                  <option value="1">1</option>
-                                  <option value="2">2</option>
-                                  <option value="3">3</option>
-                                  <option value="4">4</option>
-                                  <option value="5">5</option>
+                                  <option value="1" {% if block.confidenceLevel == 1 %}selected{% endif %}>1</option>
+                                  <option value="2" {% if block.confidenceLevel == 2 %}selected{% endif %}>2</option>
+                                  <option value="3" {% if block.confidenceLevel == 3 %}selected{% endif %}>3</option>
+                                  <option value="4" {% if block.confidenceLevel == 4 %}selected{% endif %}>4</option>
+                                  <option value="5" {% if block.confidenceLevel == 5 %}selected{% endif %}>5</option>
                                 </select>
                               </label>
                               <button type="submit" class="small-action-button">Update</button>

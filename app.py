@@ -20,7 +20,7 @@ from utils import (
     get_dashboard_data,
     init_db,
     update_academic_item,
-    update_chapter_confidence,
+    update_chapter_progress,
     update_session,
 )
 
@@ -613,18 +613,21 @@ def remove_academic_item(item_id: int):
     return redirect(url_for("index"))
 
 
-@app.post("/chapters/confidence")
+@app.post("/chapters/progress")
 @_login_required
-def change_chapter_confidence():
+def change_chapter_progress():
     try:
-        update_chapter_confidence(
+        update_chapter_progress(
             request.form.get("chapter_id", ""),
             int(request.form.get("confidence_level", "")),
+            request.form.get("progress_status", ""),
+            supabase=_get_authenticated_supabase(),
+            user_id=_require_user_id(),
         )
     except (TypeError, ValueError) as exc:
         flash(str(exc), "error")
     else:
-        flash("Chapter confidence updated.", "success")
+        flash("Chapter progress updated.", "success")
 
     return redirect(url_for("index"))
 

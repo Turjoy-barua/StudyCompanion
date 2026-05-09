@@ -45,6 +45,45 @@ def test_generate_study_plan_prioritizes_urgent_low_confidence_chapter():
     assert plan[0]["totalStudyMinutes"] <= 75
 
 
+def test_generate_study_plan_uses_chapter_status():
+    due_date = (date.today() + timedelta(days=4)).isoformat()
+    chapters = [
+        Chapter(
+            id="biology-weak",
+            title="Respiration",
+            subject="Biology",
+            dueDate=due_date,
+            confidenceLevel=3,
+            importance=4,
+            isFinished=False,
+            pastStudyMinutes=30,
+            estimatedTotalMinutes=80,
+            difficulty=3,
+            progressStatus="weak",
+        ),
+        Chapter(
+            id="biology-complete",
+            title="Cell structure",
+            subject="Biology",
+            dueDate=due_date,
+            confidenceLevel=4,
+            importance=4,
+            isFinished=True,
+            pastStudyMinutes=80,
+            estimatedTotalMinutes=80,
+            difficulty=2,
+            progressStatus="complete",
+        ),
+    ]
+
+    plan = plan_to_dict(generate_study_plan(chapters, 45, date.today(), date.today()))
+
+    assert plan[0]["blocks"][0]["chapterId"] == "biology-weak"
+    assert plan[0]["blocks"][0]["progressStatus"] == "weak"
+    assert plan[0]["blocks"][0]["method"] == "active recall + quiz"
+
+
 if __name__ == "__main__":
     test_generate_study_plan_prioritizes_urgent_low_confidence_chapter()
+    test_generate_study_plan_uses_chapter_status()
     print("study_planner example passed")

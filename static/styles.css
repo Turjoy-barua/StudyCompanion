@@ -904,9 +904,42 @@ th {
   font-size: 1.08rem;
 }
 
+.chapter-status-chip {
+  display: inline-flex;
+  width: fit-content;
+  margin: 0.45rem 0 0;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+}
+
+.chapter-status-not_started {
+  color: #6b4f00;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.chapter-status-studying {
+  color: #075985;
+  background: rgba(14, 165, 233, 0.14);
+}
+
+.chapter-status-weak {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.chapter-status-complete {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.14);
+}
+
 .confidence-update-form {
   display: grid;
-  grid-template-columns: 92px auto;
+  grid-template-columns: 128px 92px auto;
   gap: 0.55rem;
   align-items: end;
 }
@@ -2374,8 +2407,14 @@ body:is([data-app-theme="dark"], [data-app-theme="slate"]) .log-panel .mini-card
   }
 
   .planner-item-actions,
-  .row-actions {
+  .row-actions,
+  .confidence-update-form {
     width: 100%;
+  }
+
+  .adaptive-plan-block,
+  .confidence-update-form {
+    grid-template-columns: 1fr;
   }
 
   .inline-edit,

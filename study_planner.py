@@ -97,10 +97,10 @@ def choose_study_method(chapter: Chapter) -> str:
         return "active recall + quiz"
     if progress_status == "weak":
         return "active recall + explanation"
-    if progress_status == "not_started" or not chapter.isFinished:
-        return "learning + summary"
     if importance >= 4 and confidence <= 2:
         return "active recall + quiz"
+    if progress_status == "not_started" or not chapter.isFinished:
+        return "learning + summary"
     if confidence <= 2:
         return "active recall + explanation"
     if confidence == 3:

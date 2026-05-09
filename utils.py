@@ -53,6 +53,7 @@ SessionRecord = dict[str, object]
 AcademicItemRecord = dict[str, object]
 StudySubjectRecord = dict[str, object]
 SUPABASE_ENABLED = bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_ANON_KEY"))
+CHAPTER_PROGRESS_STATUSES = {"not_started", "studying", "weak", "complete"}
 MAX_QUOTE_WORDS = 20
 
 
@@ -116,7 +117,9 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS study_chapter_progress (
                 chapter_id TEXT PRIMARY KEY,
+                user_id TEXT,
                 confidence_level INTEGER NOT NULL CHECK(confidence_level >= 1 AND confidence_level <= 5),
+                progress_status TEXT NOT NULL DEFAULT 'not_started' CHECK(progress_status IN ('not_started', 'studying', 'weak', 'complete')),
                 is_finished INTEGER NOT NULL DEFAULT 0,
                 past_study_minutes INTEGER NOT NULL DEFAULT 0 CHECK(past_study_minutes >= 0),
                 estimated_total_minutes INTEGER,
@@ -125,6 +128,14 @@ def init_db() -> None:
             )
             """
         )
+        for column_sql in (
+            "ALTER TABLE study_chapter_progress ADD COLUMN user_id TEXT",
+            "ALTER TABLE study_chapter_progress ADD COLUMN progress_status TEXT NOT NULL DEFAULT 'not_started' CHECK(progress_status IN ('not_started', 'studying', 'weak', 'complete'))",
+        ):
+            try:
+                connection.execute(column_sql)
+            except sqlite3.OperationalError:
+                pass
         
 
 
@@ -215,24 +226,89 @@ def _chapter_id(item_id: object, chapter_index: int) -> str:
     return f"academic:{item_id}:chapter:{chapter_index}"
 
 
-def fetch_chapter_progress() -> dict[str, dict[str, int | bool | None]]:
+def _normalize_chapter_status(status: str | None, is_finished: bool = False) -> str:
+    if is_finished:
+        return "complete"
+    normalized_status = (status or "not_started").strip().lower().replace("-", "_").replace(" ", "_")
+    return normalized_status if normalized_status in CHAPTER_PROGRESS_STATUSES else "not_started"
+
+
+def fetch_chapter_progress(
+    supabase: object | None = None,
+    user_id: str | None = None,
+) -> dict[str, dict[str, int | bool | str | None]]:
+    supabase = _get_supabase(supabase)
+    if supabase is not None and user_id:
+        try:
+            response = (
+                supabase.table("study_chapter_progress")
+                .select(
+                    "chapter_id, confidence_level, progress_status, is_finished, past_study_minutes, estimated_total_minutes, difficulty, user_id"
+                )
+                .eq("user_id", user_id)
+                .execute()
+            )
+            records = response.data or []
+            return {
+                str(record["chapter_id"]): {
+                    "confidence_level": int(record.get("confidence_level", 1) or 1),
+                    "progress_status": _normalize_chapter_status(
+                        str(record.get("progress_status") or ""),
+                        bool(record.get("is_finished")),
+                    ),
+                    "is_finished": bool(record.get("is_finished"))
+                    or _normalize_chapter_status(str(record.get("progress_status") or "")) == "complete",
+                    "past_study_minutes": int(record.get("past_study_minutes", 0) or 0),
+                    "estimated_total_minutes": record.get("estimated_total_minutes"),
+                    "difficulty": record.get("difficulty"),
+                }
+                for record in records
+            }
+        except Exception as exc:
+            if not (
+                _is_missing_supabase_table(exc, "study_chapter_progress")
+                or _is_missing_supabase_column(exc, "progress_status")
+                or _is_missing_supabase_column(exc, "is_finished")
+            ):
+                raise
+
     with get_connection() as connection:
-        rows = connection.execute(
-            """
-            SELECT chapter_id,
-                   confidence_level,
-                   is_finished,
-                   past_study_minutes,
-                   estimated_total_minutes,
-                   difficulty
-            FROM study_chapter_progress
-            """
-        ).fetchall()
+        if user_id:
+            rows = connection.execute(
+                """
+                SELECT chapter_id,
+                       confidence_level,
+                       progress_status,
+                       is_finished,
+                       past_study_minutes,
+                       estimated_total_minutes,
+                       difficulty
+                FROM study_chapter_progress
+                WHERE user_id = ? OR user_id IS NULL
+                ORDER BY user_id IS NOT NULL
+                """,
+                (user_id,),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """
+                SELECT chapter_id,
+                       confidence_level,
+                       progress_status,
+                       is_finished,
+                       past_study_minutes,
+                       estimated_total_minutes,
+                       difficulty
+                FROM study_chapter_progress
+                WHERE user_id IS NULL
+                """
+            ).fetchall()
 
     return {
         str(row["chapter_id"]): {
             "confidence_level": int(row["confidence_level"]),
-            "is_finished": bool(row["is_finished"]),
+            "progress_status": _normalize_chapter_status(row["progress_status"], bool(row["is_finished"])),
+            "is_finished": bool(row["is_finished"]) or _normalize_chapter_status(row["progress_status"]) == "complete",
             "past_study_minutes": int(row["past_study_minutes"]),
             "estimated_total_minutes": row["estimated_total_minutes"],
             "difficulty": row["difficulty"],
@@ -241,28 +317,80 @@ def fetch_chapter_progress() -> dict[str, dict[str, int | bool | None]]:
     }
 
 
-def update_chapter_confidence(chapter_id: str, confidence_level: int) -> None:
+def update_chapter_progress(
+    chapter_id: str,
+    confidence_level: int,
+    progress_status: str,
+    supabase: object | None = None,
+    user_id: str | None = None,
+) -> None:
     normalized_chapter_id = chapter_id.strip()
     if not normalized_chapter_id:
         raise ValueError("Chapter id is required.")
     if not 1 <= confidence_level <= 5:
         raise ValueError("Confidence must be between 1 and 5.")
+    normalized_status = _normalize_chapter_status(progress_status)
+    is_finished = 1 if normalized_status == "complete" else 0
+    updated_at = datetime.now().isoformat(timespec="seconds")
+
+    supabase = _get_supabase(supabase)
+    if supabase is not None and user_id:
+        payload = {
+            "chapter_id": normalized_chapter_id,
+            "user_id": user_id,
+            "confidence_level": confidence_level,
+            "progress_status": normalized_status,
+            "is_finished": bool(is_finished),
+            "updated_at": updated_at,
+        }
+        try:
+            supabase.table("study_chapter_progress").upsert(payload, on_conflict="user_id,chapter_id").execute()
+            return
+        except Exception as exc:
+            if not (
+                _is_missing_supabase_table(exc, "study_chapter_progress")
+                or _is_missing_supabase_column(exc, "progress_status")
+                or _is_missing_supabase_column(exc, "is_finished")
+            ):
+                raise
 
     with get_connection() as connection:
         connection.execute(
             """
             INSERT INTO study_chapter_progress (
                 chapter_id,
+                user_id,
                 confidence_level,
+                progress_status,
+                is_finished,
                 updated_at
             )
-            VALUES (?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(chapter_id) DO UPDATE SET
+                user_id = excluded.user_id,
                 confidence_level = excluded.confidence_level,
+                progress_status = excluded.progress_status,
+                is_finished = excluded.is_finished,
                 updated_at = excluded.updated_at
             """,
-            (normalized_chapter_id, confidence_level, datetime.now().isoformat(timespec="seconds")),
+            (
+                normalized_chapter_id,
+                user_id,
+                confidence_level,
+                normalized_status,
+                is_finished,
+                updated_at,
+            ),
         )
+
+
+def update_chapter_confidence(
+    chapter_id: str,
+    confidence_level: int,
+    supabase: object | None = None,
+    user_id: str | None = None,
+) -> None:
+    update_chapter_progress(chapter_id, confidence_level, "studying", supabase=supabase, user_id=user_id)
 
 
 def add_session(
@@ -1353,7 +1481,7 @@ def _build_subject_priorities(
 def _build_chapters_from_academic_items(
     academic_items: list[AcademicItemRecord],
     subject_totals: dict[str, int],
-    progress_by_chapter: dict[str, dict[str, int | bool | None]],
+    progress_by_chapter: dict[str, dict[str, int | bool | str | None]],
 ) -> list[Chapter]:
     chapters: list[Chapter] = []
 
@@ -1371,7 +1499,11 @@ def _build_chapters_from_academic_items(
             estimated_total = int(progress.get("estimated_total_minutes") or (25 + (difficulty * 15)))
             past_minutes = int(progress.get("past_study_minutes") or min(shared_subject_minutes, estimated_total))
             confidence_level = int(progress.get("confidence_level") or base_confidence)
-            is_finished = bool(progress.get("is_finished") or past_minutes >= estimated_total)
+            progress_status = _normalize_chapter_status(
+                str(progress.get("progress_status") or ""),
+                bool(progress.get("is_finished") or past_minutes >= estimated_total),
+            )
+            is_finished = progress_status == "complete"
 
             chapters.append(
                 Chapter(
@@ -1385,6 +1517,7 @@ def _build_chapters_from_academic_items(
                     pastStudyMinutes=past_minutes,
                     estimatedTotalMinutes=estimated_total,
                     difficulty=difficulty,
+                    progressStatus=progress_status,
                 )
             )
 
@@ -1394,11 +1527,13 @@ def _build_chapters_from_academic_items(
 def _build_adaptive_study_plan(
     academic_items: list[AcademicItemRecord],
     subject_totals: dict[str, int],
+    supabase: object | None = None,
     available_minutes_per_day: int = 120,
     horizon_days: int = 7,
+    user_id: str | None = None,
 ) -> dict:
     today = date.today()
-    progress = fetch_chapter_progress()
+    progress = fetch_chapter_progress(supabase=supabase, user_id=user_id)
     chapters = _build_chapters_from_academic_items(academic_items, subject_totals, progress)
     if not chapters:
         return {
@@ -1596,8 +1731,10 @@ def get_dashboard_data(
     adaptive_study_plan = _build_adaptive_study_plan(
         academic_items,
         subject_totals,
+        supabase=supabase,
         available_minutes_per_day=120,
         horizon_days=14 if demo else 7,
+        user_id=user_id,
     )
     upcoming_items = []
     for item in academic_items:
